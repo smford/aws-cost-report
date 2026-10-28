@@ -1,0 +1,20 @@
+version: "1"
+defaults:
+  currency: "USD"
+  months_back: 1
+  min_display_cost: 0.01
+  metrics:
+    - "UnblendedCost"
+    - "BlendedCost"
+    - "AmortizedCost"
+
+grouping:
+  type: "DIMENSION" # DIMENSION or TAG
+  key: "SERVICE"    # SERVICE, LINKED_ACCOUNT, or Tag Key
+
+budget:
+  fail_on_threshold: 0.00 # 0.00 disables exit-1 behavior
+
+reporting:
+  format: "table" # table, markdown, json, csv
+  write_job_summary: true

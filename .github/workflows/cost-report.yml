@@ -1,0 +1,68 @@
+name: AWS Cost Report
+
+on:
+  schedule:
+    # Run at 09:00 UTC on the 1st of every month
+    - cron: '0 9 1 * *'
+  workflow_dispatch:
+    inputs:
+      months:
+        description: 'Number of full months back to report'
+        required: false
+        default: '1'
+      format:
+        description: 'Report output format (table, markdown, json, csv)'
+        required: false
+        default: 'markdown'
+      compare:
+        description: 'Include Month-over-Month comparison'
+        required: false
+        default: 'true'
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  report:
+    name: Generate Monthly Cost Report
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Go
+        uses: actions/setup-go@f111f3307d8850f501ac008e886eec1fd1932a34 # v5.3.0
+        with:
+          go-version-file: 'go.mod'
+          check-latest: true
+
+      - name: Build aws-cost-report CLI
+        run: CGO_ENABLED=0 go build -ldflags="-s -w" -o ./bin/aws-cost-report ./cmd/aws-cost-report
+
+      - name: Configure AWS Credentials (OIDC)
+        if: env.AWS_ROLE_ARN != ''
+        uses: aws-actions/configure-aws-credentials@ececac1a45f3b08a01d2dd070d28d111c5fe6722 # v4.1.0
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+          audience: sts.amazonaws.com
+        env:
+          AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+
+      - name: Execute Cost Report
+        run: |
+          FLAGS="--format=${{ github.event.inputs.format || 'markdown' }}"
+          if [ "${{ github.event.inputs.compare || 'true' }}" = "true" ]; then
+            FLAGS="$FLAGS --compare"
+          fi
+          if [ -n "${{ github.event.inputs.months }}" ]; then
+            FLAGS="$FLAGS --months=${{ github.event.inputs.months }}"
+          fi
+
+          if [ -z "${{ secrets.AWS_ROLE_ARN }}" ]; then
+            echo "::notice::AWS_ROLE_ARN secret not configured. Executing with --mock for demonstration."
+            FLAGS="$FLAGS --mock"
+          fi
+
+          ./bin/aws-cost-report $FLAGS
