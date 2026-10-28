@@ -42,7 +42,7 @@ func RenderCSV(w io.Writer, r *awsclient.CostReport) error {
 				fmt.Sprintf("%.2f", item.UnblendedCost),
 				fmt.Sprintf("%.2f", item.PrevUnblendedCost),
 				fmt.Sprintf("%.2f", item.MoMDeltaAmount),
-				fmt.Sprintf("%.2f%%", item.MoMDeltaPercent),
+				fmt.Sprintf("%.2f", item.MoMDeltaPercent),
 				fmt.Sprintf("%.2f", item.BlendedCost),
 				fmt.Sprintf("%.2f", item.AmortizedCost),
 				r.Metadata.Currency,

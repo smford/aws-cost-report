@@ -10,10 +10,15 @@ import (
 )
 
 // RenderMarkdown generates a GitHub-Flavored Markdown report and optionally writes to $GITHUB_STEP_SUMMARY.
-func RenderMarkdown(w io.Writer, r *awsclient.CostReport, writeJobSummary bool) error {
+func RenderMarkdown(w io.Writer, r *awsclient.CostReport, writeJobSummary bool, failOnThreshold float64) error {
 	var b strings.Builder
 
 	b.WriteString("# 📊 AWS Monthly Billing & Usage Report\n\n")
+
+	if failOnThreshold > 0.00 && r.Totals.UnblendedCost > failOnThreshold {
+		b.WriteString(fmt.Sprintf("> [!CAUTION]\n> **Budget Guardrail Alert**: Total billing of **$%.2f %s** exceeds the configured threshold of **$%.2f %s**!\n\n",
+			r.Totals.UnblendedCost, r.Metadata.Currency, failOnThreshold, r.Metadata.Currency))
+	}
 
 	// Metadata Table
 	b.WriteString("### 📋 Report Metadata\n\n")

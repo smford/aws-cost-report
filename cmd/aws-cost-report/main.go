@@ -60,20 +60,20 @@ func runCLI(cfg *config.Config) {
 		var err error
 		client, err = awsclient.NewRealClient(ctx)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error initializing AWS client: %v\nHint: Verify AWS credentials or run with --mock for simulated data.\n", err)
+			printCredentialHelp(err)
 			os.Exit(1)
 		}
 	}
 
 	report, err := client.GenerateReport(ctx, cfg, time.Now())
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error generating cost report: %v\n", err)
+		printCredentialHelp(err)
 		os.Exit(1)
 	}
 
 	switch cfg.Reporting.Format {
 	case "markdown", "md":
-		if err := renderer.RenderMarkdown(os.Stdout, report, cfg.Reporting.WriteJobSummary); err != nil {
+		if err := renderer.RenderMarkdown(os.Stdout, report, cfg.Reporting.WriteJobSummary, cfg.Budget.FailOnThreshold); err != nil {
 			fmt.Fprintf(os.Stderr, "Error rendering markdown: %v\n", err)
 			os.Exit(1)
 		}
@@ -149,7 +149,7 @@ func runServer(cfg *config.Config) {
 		switch formatParam {
 		case "markdown", "md":
 			w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
-			_ = renderer.RenderMarkdown(w, report, false)
+			_ = renderer.RenderMarkdown(w, report, false, 0.00)
 		case "table":
 			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 			_ = renderer.RenderTable(w, report, true)
@@ -188,4 +188,15 @@ func runServer(cfg *config.Config) {
 	if err := server.Shutdown(shutdownCtx); err != nil {
 		log.Printf("Graceful shutdown error: %v", err)
 	}
+}
+
+func printCredentialHelp(err error) {
+	fmt.Fprintf(os.Stderr, "Error: %v\n\n", err)
+	fmt.Fprintln(os.Stderr, "AWS Credential Resolution Order:")
+	fmt.Fprintln(os.Stderr, "  1. Environment variables (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN)")
+	fmt.Fprintln(os.Stderr, "  2. Shared credentials/config file (~/.aws/credentials, ~/.aws/config, AWS_PROFILE)")
+	fmt.Fprintln(os.Stderr, "  3. IAM Identity Center (AWS SSO token cache)")
+	fmt.Fprintln(os.Stderr, "  4. Web Identity / OIDC token (AWS_ROLE_ARN and AWS_WEB_IDENTITY_TOKEN_FILE in CI)")
+	fmt.Fprintln(os.Stderr, "  5. Amazon ECS / EC2 Instance Metadata Service (IMDSv2)")
+	fmt.Fprintln(os.Stderr, "\nTip: Run with --mock to test output rendering and budget alerts with simulated billing data.")
 }

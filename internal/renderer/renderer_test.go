@@ -74,7 +74,7 @@ func TestRenderTableColors(t *testing.T) {
 func TestRenderMarkdown(t *testing.T) {
 	report := getTestReport(false)
 	var buf bytes.Buffer
-	err := RenderMarkdown(&buf, report, false)
+	err := RenderMarkdown(&buf, report, false, 0.00)
 	if err != nil {
 		t.Fatalf("RenderMarkdown failed: %v", err)
 	}
@@ -88,6 +88,21 @@ func TestRenderMarkdown(t *testing.T) {
 	}
 	if !strings.Contains(out, "| Amazon DynamoDB | $5.51 | $5.51 | $5.51 |") {
 		t.Errorf("expected DynamoDB line in markdown")
+	}
+}
+
+func TestRenderMarkdownBudgetAlert(t *testing.T) {
+	report := getTestReport(false)
+	var buf bytes.Buffer
+	// Total cost is 21.58, threshold is 10.00 -> should trigger [!CAUTION] alert
+	err := RenderMarkdown(&buf, report, false, 10.00)
+	if err != nil {
+		t.Fatalf("RenderMarkdown failed: %v", err)
+	}
+
+	out := buf.String()
+	if !strings.Contains(out, "> [!CAUTION]") || !strings.Contains(out, "Budget Guardrail Alert") {
+		t.Errorf("expected budget alert callout in markdown output")
 	}
 }
 
