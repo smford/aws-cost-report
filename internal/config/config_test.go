@@ -97,4 +97,24 @@ reporting:
 	if !cfgWithFlags.CompareMoM {
 		t.Errorf("expected CompareMoM true")
 	}
+
+	// Test 3: Test threshold alias, output and json-summary flags
+	extraArgs := []string{
+		"--threshold", "750.50",
+		"--output", "/tmp/report.md",
+		"--json-summary", "/tmp/summary.json",
+	}
+	cfgExtra, err := LoadConfig(extraArgs)
+	if err != nil {
+		t.Fatalf("LoadConfig with extra flags failed: %v", err)
+	}
+	if cfgExtra.Budget.FailOnThreshold != 750.50 {
+		t.Errorf("expected threshold 750.50, got %f", cfgExtra.Budget.FailOnThreshold)
+	}
+	if cfgExtra.OutputFile != "/tmp/report.md" {
+		t.Errorf("expected OutputFile /tmp/report.md, got %s", cfgExtra.OutputFile)
+	}
+	if cfgExtra.JSONSummaryFile != "/tmp/summary.json" {
+		t.Errorf("expected JSONSummaryFile /tmp/summary.json, got %s", cfgExtra.JSONSummaryFile)
+	}
 }

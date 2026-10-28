@@ -5,6 +5,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/smford/aws-cost-report/internal/config"
 )
 
 func TestVersionDefaults(t *testing.T) {
@@ -45,5 +47,30 @@ func TestHealthzEndpoint(t *testing.T) {
 
 	if !strings.Contains(rr.Body.String(), `"status":"ok"`) {
 		t.Errorf("expected status ok, got %q", rr.Body.String())
+	}
+}
+
+func TestMockRunAndFileOutput(t *testing.T) {
+	tmpDir := t.TempDir()
+	outFile := tmpDir + "/report.md"
+	jsonFile := tmpDir + "/summary.json"
+
+	cfg, err := config.LoadConfig([]string{
+		"--mock",
+		"--format", "markdown",
+		"--output", outFile,
+		"--json-summary", jsonFile,
+		"--threshold", "100.00",
+	})
+	if err != nil {
+		t.Fatalf("failed to load config: %v", err)
+	}
+
+	// Verify fields
+	if cfg.OutputFile != outFile {
+		t.Errorf("expected OutputFile %s, got %s", outFile, cfg.OutputFile)
+	}
+	if cfg.JSONSummaryFile != jsonFile {
+		t.Errorf("expected JSONSummaryFile %s, got %s", jsonFile, cfg.JSONSummaryFile)
 	}
 }

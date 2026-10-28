@@ -1,8 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -71,36 +74,69 @@ func runCLI(cfg *config.Config) {
 		os.Exit(1)
 	}
 
+	var buf bytes.Buffer
+	outWriter := io.MultiWriter(os.Stdout, &buf)
+
 	switch cfg.Reporting.Format {
 	case "markdown", "md":
-		if err := renderer.RenderMarkdown(os.Stdout, report, cfg.Reporting.WriteJobSummary, cfg.Budget.FailOnThreshold); err != nil {
+		if err := renderer.RenderMarkdown(outWriter, report, cfg.Reporting.WriteJobSummary, cfg.Budget.FailOnThreshold); err != nil {
 			fmt.Fprintf(os.Stderr, "Error rendering markdown: %v\n", err)
 			os.Exit(1)
 		}
 	case "json":
-		if err := renderer.RenderJSON(os.Stdout, report); err != nil {
+		if err := renderer.RenderJSON(outWriter, report); err != nil {
 			fmt.Fprintf(os.Stderr, "Error rendering JSON: %v\n", err)
 			os.Exit(1)
 		}
 	case "csv":
-		if err := renderer.RenderCSV(os.Stdout, report); err != nil {
+		if err := renderer.RenderCSV(outWriter, report); err != nil {
 			fmt.Fprintf(os.Stderr, "Error rendering CSV: %v\n", err)
 			os.Exit(1)
 		}
 	default:
-		if err := renderer.RenderTable(os.Stdout, report, cfg.NoColor); err != nil {
+		if err := renderer.RenderTable(outWriter, report, cfg.NoColor); err != nil {
 			fmt.Fprintf(os.Stderr, "Error rendering table: %v\n", err)
 			os.Exit(1)
 		}
 	}
 
-	// Budget guardrail check
-	if cfg.Budget.FailOnThreshold > 0.00 {
-		if report.Totals.UnblendedCost > cfg.Budget.FailOnThreshold {
-			fmt.Fprintf(os.Stderr, "\n[BUDGET ALERT] Total cost (%.2f %s) exceeds configured threshold (%.2f %s)!\n",
-				report.Totals.UnblendedCost, cfg.Defaults.Currency, cfg.Budget.FailOnThreshold, cfg.Defaults.Currency)
-			os.Exit(1)
+	if cfg.OutputFile != "" {
+		if err := os.WriteFile(cfg.OutputFile, buf.Bytes(), 0644); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to write output file %s: %v\n", cfg.OutputFile, err)
 		}
+	}
+
+	thresholdBreached := cfg.Budget.FailOnThreshold > 0.00 && report.Totals.UnblendedCost > cfg.Budget.FailOnThreshold
+
+	if cfg.JSONSummaryFile != "" {
+		summary := struct {
+			TotalCost         float64 `json:"total_cost"`
+			PreviousCost      float64 `json:"previous_cost"`
+			CostDelta         float64 `json:"cost_delta"`
+			CostDeltaPct      float64 `json:"cost_delta_pct"`
+			Currency          string  `json:"currency"`
+			Threshold         float64 `json:"threshold"`
+			ThresholdBreached bool    `json:"threshold_breached"`
+		}{
+			TotalCost:         report.Totals.UnblendedCost,
+			PreviousCost:      report.Totals.PrevUnblendedCost,
+			CostDelta:         report.Totals.MoMDeltaAmount,
+			CostDeltaPct:      report.Totals.MoMDeltaPercent,
+			Currency:          report.Metadata.Currency,
+			Threshold:         cfg.Budget.FailOnThreshold,
+			ThresholdBreached: thresholdBreached,
+		}
+
+		if data, err := json.MarshalIndent(summary, "", "  "); err == nil {
+			_ = os.WriteFile(cfg.JSONSummaryFile, append(data, '\n'), 0644)
+		}
+	}
+
+	// Budget guardrail check
+	if thresholdBreached {
+		fmt.Fprintf(os.Stderr, "\n[BUDGET ALERT] Total cost (%.2f %s) exceeds configured threshold (%.2f %s)!\n",
+			report.Totals.UnblendedCost, cfg.Defaults.Currency, cfg.Budget.FailOnThreshold, cfg.Defaults.Currency)
+		os.Exit(1)
 	}
 }
 

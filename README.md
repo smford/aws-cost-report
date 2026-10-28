@@ -5,6 +5,7 @@
 [![DAST](https://github.com/smford/aws-cost-report/actions/workflows/dast.yml/badge.svg)](https://github.com/smford/aws-cost-report/actions/workflows/dast.yml)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/smford/aws-cost-report/badge)](https://scorecard.dev/viewer/?uri=github.com/smford/aws-cost-report)
 [![GitHub Release](https://img.shields.io/github/v/release/smford/aws-cost-report?logo=github)](https://github.com/smford/aws-cost-report/releases)
+[![GitHub Action](https://img.shields.io/badge/GitHub%20Action-smford%2Faws--cost--report-blue?logo=githubactions&logoColor=white)](https://github.com/smford/aws-cost-report)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-blue.svg)](http://stephenford.org/aws-cost-report/)
 
@@ -178,9 +179,101 @@ aws-cost-report --format=csv > monthly-costs.csv
 
 ---
 
-## GitHub Actions CI/CD Integration
+## GitHub Action
 
-Deploy `aws-cost-report` into your GitHub Actions workflows using keyless AWS OIDC authentication:
+`aws-cost-report` is available as a first-class GitHub Action that can be dropped into any workflow with zero setup. It automatically downloads pre-built native binaries, runs cost audits, provides Month-over-Month comparisons, outputs structured metrics to workflow steps, and writes beautiful markdown reports into `$GITHUB_STEP_SUMMARY`.
+
+### Quickstart
+
+```yaml
+name: AWS Cost Guardrail
+
+on:
+  schedule:
+    - cron: '0 9 1 * *' # Run at 09:00 UTC on the 1st of every month
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  cost-report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@ececac1a45f3b08a01d2dd070d28d111c5fe6722 # v4.1.0
+        with:
+          role-to-assume: arn:aws:iam::123456789012:role/GitHubActionsCostReport
+          aws-region: us-east-1
+
+      - name: Generate Cost Report
+        uses: smford/aws-cost-report@v0.1.0
+        with:
+          compare: 'true'
+          threshold: '500.00'
+          format: 'markdown'
+```
+
+### Action Inputs
+
+| Input | Description | Default | Required |
+|:---|:---|:---|:---:|
+| `version` | Version of `aws-cost-report` binary to run (e.g. `v0.1.0` or `latest`) | `v0.1.0` | No |
+| `compare` | Enable Month-over-Month comparison against preceding period (`true`/`false`) | `true` | No |
+| `format` | Report output format (`markdown`, `table`, `json`, `csv`) | `markdown` | No |
+| `months` | Number of historical months back to query | `1` | No |
+| `start` | Explicit billing start date (`YYYY-MM-01` or `YYYY-MM-DD`) | `""` | No |
+| `end` | Explicit billing end date (`YYYY-MM-01` or `YYYY-MM-DD`) | `""` | No |
+| `group-by` | Grouping dimension (`SERVICE`, `LINKED_ACCOUNT`, or `TAG:<Key>`) | `SERVICE` | No |
+| `filter` | Comma-separated substring filter for services (e.g. `DynamoDB,Lambda`) | `""` | No |
+| `threshold` | SRE budget alert dollar threshold (e.g. `500.00`). Exceeding fails the step. | `""` | No |
+| `fail-on-threshold` | Whether to terminate step with failure on threshold breach (`true`/`false`) | `true` | No |
+| `min-cost` | Minimum cost floor to display in itemized breakdown | `""` | No |
+| `write-summary` | Automatically publish markdown table to `$GITHUB_STEP_SUMMARY` | `true` | No |
+| `mock` | Run with offline deterministic mock data (no AWS API calls) | `false` | No |
+| `config` | Path to custom YAML configuration file | `""` | No |
+| `output-file` | Optional path to save the formatted report to disk | `""` | No |
+
+### Action Outputs
+
+| Output | Description | Example |
+|:---|:---|:---|
+| `report` | Full formatted cost report string | Multi-line table/markdown |
+| `total-cost` | Current period total unblended cost | `21.58` |
+| `previous-cost` | Preceding period total unblended cost | `21.13` |
+| `cost-delta` | Absolute dollar difference (`total - previous`) | `0.45` |
+| `cost-delta-pct` | Percentage change in total cost | `2.13` |
+| `threshold-breached` | `true` if total cost exceeded configured `threshold` | `false` |
+| `report-file` | Destination file path if `output-file` was set | `./cost-report.md` |
+
+### Automated PR / Slack Notification Example
+
+```yaml
+      - name: Run AWS Cost Report
+        id: cost
+        uses: smford/aws-cost-report@v0.1.0
+        with:
+          compare: 'true'
+          threshold: '1000.00'
+          fail-on-threshold: 'false'
+
+      - name: Post Cost Summary on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `### 💸 AWS Cost Report\n**Total:** $${{ steps.cost.outputs.total-cost }} (Delta: ${{ steps.cost.outputs.cost-delta-pct }}%)\n\nThreshold Breached: ${{ steps.cost.outputs.threshold-breached }}`
+            })
+```
+
+---
+
+## GitHub Actions CI/CD Integration (Manual CLI Script)
 
 ```yaml
 name: Monthly AWS Cost Report

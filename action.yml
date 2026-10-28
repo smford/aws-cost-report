@@ -1,0 +1,270 @@
+name: 'AWS Cost Report'
+description: 'Production AWS Cost Explorer reporting, Month-over-Month delta tracking, and CI/CD budget guardrail.'
+author: 'Stephen Ford <stephen@stephenford.org>'
+branding:
+  icon: 'dollar-sign'
+  color: 'yellow'
+
+inputs:
+  version:
+    description: 'Version of aws-cost-report binary to execute (e.g. v0.1.0, latest, or local)'
+    required: false
+    default: 'v0.1.0'
+  compare:
+    description: 'Include Month-over-Month comparison with preceding period (true/false)'
+    required: false
+    default: 'true'
+  format:
+    description: 'Report output format (markdown, table, json, csv)'
+    required: false
+    default: 'markdown'
+  months:
+    description: 'Number of historical full months back to query'
+    required: false
+    default: '1'
+  start:
+    description: 'Explicit start date (YYYY-MM-01 or YYYY-MM-DD)'
+    required: false
+    default: ''
+  end:
+    description: 'Explicit end date (YYYY-MM-01 or YYYY-MM-DD)'
+    required: false
+    default: ''
+  group-by:
+    description: 'Grouping dimension (SERVICE, LINKED_ACCOUNT, or TAG:<Key>)'
+    required: false
+    default: 'SERVICE'
+  filter:
+    description: 'Comma-separated substring filter for services or line items'
+    required: false
+    default: ''
+  threshold:
+    description: 'Budget alert threshold amount (e.g. 500.00). Alerts in Step Summary and fails step if exceeded.'
+    required: false
+    default: ''
+  fail-on-threshold:
+    description: 'Whether to exit with failure if the budget threshold is breached (true/false)'
+    required: false
+    default: 'true'
+  min-cost:
+    description: 'Minimum cost threshold to display'
+    required: false
+    default: ''
+  write-summary:
+    description: 'Whether to write markdown report to GitHub Step Summary ($GITHUB_STEP_SUMMARY)'
+    required: false
+    default: 'true'
+  mock:
+    description: 'Run in offline mock mode with simulated billing data (true/false)'
+    required: false
+    default: 'false'
+  config:
+    description: 'Path to custom YAML configuration file'
+    required: false
+    default: ''
+  output-file:
+    description: 'Optional file path to save report output'
+    required: false
+    default: ''
+
+outputs:
+  report:
+    description: 'The formatted cost report output'
+    value: ${{ steps.run-report.outputs.report }}
+  total-cost:
+    description: 'Total cost for the current period'
+    value: ${{ steps.run-report.outputs.total_cost }}
+  previous-cost:
+    description: 'Total cost for the previous comparison period'
+    value: ${{ steps.run-report.outputs.previous_cost }}
+  cost-delta:
+    description: 'Absolute cost delta amount'
+    value: ${{ steps.run-report.outputs.cost_delta }}
+  cost-delta-pct:
+    description: 'Percentage change in cost'
+    value: ${{ steps.run-report.outputs.cost_delta_pct }}
+  threshold-breached:
+    description: 'Whether the budget threshold was breached (true/false)'
+    value: ${{ steps.run-report.outputs.threshold_breached }}
+  report-file:
+    description: 'File path where the report was saved if output-file was specified'
+    value: ${{ steps.run-report.outputs.report_file }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up aws-cost-report CLI
+      id: setup-cli
+      shell: bash
+      run: |
+        if command -v aws-cost-report >/dev/null 2>&1; then
+          echo "aws-cost-report already present in PATH at $(command -v aws-cost-report)"
+          exit 0
+        fi
+
+        if [ -x "./bin/aws-cost-report" ]; then
+          echo "Found local repository binary at ./bin/aws-cost-report"
+          echo "$(pwd)/bin" >> "$GITHUB_PATH"
+          exit 0
+        fi
+
+        OS_NAME="$(uname -s | tr '[:upper:]' '[:lower:]')"
+        ARCH_NAME="$(uname -m)"
+
+        case "$OS_NAME" in
+          linux) OS="linux" ;;
+          darwin) OS="darwin" ;;
+          *) echo "::error::Unsupported operating system: $OS_NAME"; exit 1 ;;
+        esac
+
+        case "$ARCH_NAME" in
+          x86_64|amd64) ARCH="amd64" ;;
+          aarch64|arm64) ARCH="arm64" ;;
+          *) echo "::error::Unsupported architecture: $ARCH_NAME"; exit 1 ;;
+        esac
+
+        BIN_DIR="${RUNNER_TEMP:-/tmp}/aws-cost-report-bin"
+        mkdir -p "$BIN_DIR"
+
+        VERSION="${{ inputs.version }}"
+        if [ -z "$VERSION" ] || [ "$VERSION" = "latest" ]; then
+          VERSION="v0.1.0"
+        fi
+        VER_NUM="${VERSION#v}"
+
+        TAR_NAME="aws-cost-report_${VER_NUM}_${OS}_${ARCH}.tar.gz"
+        DOWNLOAD_URL="https://github.com/smford/aws-cost-report/releases/download/${VERSION}/${TAR_NAME}"
+
+        echo "Fetching aws-cost-report ${VERSION} (${OS}/${ARCH})..."
+        if curl -fsSL "$DOWNLOAD_URL" -o "${BIN_DIR}/${TAR_NAME}"; then
+          tar -xzf "${BIN_DIR}/${TAR_NAME}" -C "$BIN_DIR" aws-cost-report
+          chmod +x "${BIN_DIR}/aws-cost-report"
+          echo "$BIN_DIR" >> "$GITHUB_PATH"
+          echo "Successfully installed aws-cost-report ${VERSION} to ${BIN_DIR}"
+        else
+          if command -v go >/dev/null 2>&1; then
+            echo "::warning::Release download failed; building from source via go install..."
+            GOBIN="$BIN_DIR" CGO_ENABLED=0 go install github.com/smford/aws-cost-report/cmd/aws-cost-report@latest || true
+            if [ -x "${BIN_DIR}/aws-cost-report" ]; then
+              echo "$BIN_DIR" >> "$GITHUB_PATH"
+              exit 0
+            fi
+          fi
+          echo "::error::Failed to download or build aws-cost-report from ${DOWNLOAD_URL}"
+          exit 1
+        fi
+
+    - name: Execute AWS Cost Report
+      id: run-report
+      shell: bash
+      run: |
+        ARGS=()
+
+        if [ "${{ inputs.compare }}" = "true" ]; then
+          ARGS+=("--compare")
+        fi
+
+        if [ -n "${{ inputs.format }}" ]; then
+          ARGS+=("--format=${{ inputs.format }}")
+        fi
+
+        if [ -n "${{ inputs.months }}" ] && [ "${{ inputs.months }}" != "0" ]; then
+          ARGS+=("--months=${{ inputs.months }}")
+        fi
+
+        if [ -n "${{ inputs.start }}" ]; then
+          ARGS+=("--start=${{ inputs.start }}")
+        fi
+
+        if [ -n "${{ inputs.end }}" ]; then
+          ARGS+=("--end=${{ inputs.end }}")
+        fi
+
+        if [ -n "${{ inputs.group-by }}" ]; then
+          ARGS+=("--group-by=${{ inputs.group-by }}")
+        fi
+
+        if [ -n "${{ inputs.filter }}" ]; then
+          ARGS+=("--filter=${{ inputs.filter }}")
+        fi
+
+        if [ -n "${{ inputs.threshold }}" ]; then
+          ARGS+=("--threshold=${{ inputs.threshold }}")
+        fi
+
+        if [ -n "${{ inputs.min-cost }}" ]; then
+          ARGS+=("--min-cost=${{ inputs.min-cost }}")
+        fi
+
+        if [ "${{ inputs.write-summary }}" = "true" ]; then
+          ARGS+=("--write-summary=true")
+        else
+          ARGS+=("--write-summary=false")
+        fi
+
+        if [ "${{ inputs.mock }}" = "true" ]; then
+          ARGS+=("--mock")
+        fi
+
+        if [ -n "${{ inputs.config }}" ]; then
+          ARGS+=("--config=${{ inputs.config }}")
+        fi
+
+        REPORT_TMP="${RUNNER_TEMP:-/tmp}/aws-cost-report-output.txt"
+        SUMMARY_TMP="${RUNNER_TEMP:-/tmp}/aws-cost-report-summary.json"
+
+        # Check if the installed binary supports --json-summary
+        if aws-cost-report --help 2>&1 | grep -q -- "--json-summary"; then
+          ARGS+=("--json-summary=${SUMMARY_TMP}")
+        fi
+
+        set +e
+        aws-cost-report "${ARGS[@]}" > "$REPORT_TMP"
+        EXIT_CODE=$?
+        set -e
+
+        # Print output to runner stdout
+        cat "$REPORT_TMP"
+
+        # Handle optional output-file
+        if [ -n "${{ inputs.output-file }}" ]; then
+          mkdir -p "$(dirname "${{ inputs.output-file }}")"
+          cp "$REPORT_TMP" "${{ inputs.output-file }}"
+          echo "report_file=${{ inputs.output-file }}" >> "$GITHUB_OUTPUT"
+        fi
+
+        # Write multiline report output to GITHUB_OUTPUT
+        {
+          echo "report<<EOF"
+          cat "$REPORT_TMP"
+          echo "EOF"
+        } >> "$GITHUB_OUTPUT"
+
+        # Populate structured output metrics
+        if [ -f "$SUMMARY_TMP" ]; then
+          TOTAL_COST=$(jq -r '.total_cost // "0.00"' "$SUMMARY_TMP")
+          PREV_COST=$(jq -r '.previous_cost // "0.00"' "$SUMMARY_TMP")
+          COST_DELTA=$(jq -r '.cost_delta // "0.00"' "$SUMMARY_TMP")
+          COST_DELTA_PCT=$(jq -r '.cost_delta_pct // "0.00"' "$SUMMARY_TMP")
+          BREACHED=$(jq -r '.threshold_breached // false' "$SUMMARY_TMP")
+          echo "total_cost=${TOTAL_COST}" >> "$GITHUB_OUTPUT"
+          echo "previous_cost=${PREV_COST}" >> "$GITHUB_OUTPUT"
+          echo "cost_delta=${COST_DELTA}" >> "$GITHUB_OUTPUT"
+          echo "cost_delta_pct=${COST_DELTA_PCT}" >> "$GITHUB_OUTPUT"
+          echo "threshold_breached=${BREACHED}" >> "$GITHUB_OUTPUT"
+        else
+          if [ -n "${{ inputs.threshold }}" ] && [ "$EXIT_CODE" -ne 0 ]; then
+            echo "threshold_breached=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "threshold_breached=false" >> "$GITHUB_OUTPUT"
+          fi
+        fi
+
+        # Check exit behavior for threshold breaches
+        if [ "$EXIT_CODE" -ne 0 ]; then
+          if [ "${{ inputs.fail-on-threshold }}" = "false" ] && [ -n "${{ inputs.threshold }}" ]; then
+            echo "::warning::Budget threshold exceeded, but fail-on-threshold is set to false. Proceeding."
+            exit 0
+          fi
+          exit "$EXIT_CODE"
+        fi

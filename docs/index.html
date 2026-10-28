@@ -281,7 +281,16 @@ brew install aws-cost-report</code></pre>
         <li><a href="https://github.com/smford/aws-cost-report/releases/download/v0.1.0/aws-cost-report_0.1.0_linux_amd64.tar.gz">Linux (x86_64)</a></li>
       </ul>
 
-      <h3>3. Docker Container</h3>
+      <h3>3. GitHub Action</h3>
+      <p>Drop <code>aws-cost-report</code> directly into your GitHub Actions workflow:</p>
+      <pre><code>- name: Run AWS Cost Report
+  uses: smford/aws-cost-report@v0.1.0
+  with:
+    compare: 'true'
+    threshold: '500.00'
+    format: 'markdown'</code></pre>
+
+      <h3>4. Docker Container</h3>
       <pre><code>docker pull ghcr.io/smford/aws-cost-report:v0.1.0</code></pre>
     </section>
 
@@ -303,6 +312,19 @@ brew install aws-cost-report</code></pre>
 
       <h3>GitHub Actions Job Summary</h3>
       <pre><code>aws-cost-report --format=markdown --compare</code></pre>
+
+      <h3>SRE Workflow with Threshold Outputs</h3>
+      <pre><code>- name: Run AWS Cost Report
+  id: cost
+  uses: smford/aws-cost-report@v0.1.0
+  with:
+    compare: 'true'
+    threshold: '1000.00'
+    fail-on-threshold: 'false'
+
+- name: Notify on Breach
+  if: steps.cost.outputs.threshold-breached == 'true'
+  run: echo "Warning: Cost breached threshold ($${{ steps.cost.outputs.total-cost }})"</code></pre>
     </section>
 
     <footer>

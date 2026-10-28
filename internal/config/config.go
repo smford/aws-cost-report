@@ -19,17 +19,19 @@ type Config struct {
 	Server    ServerConfig    `yaml:"server"`
 
 	// Runtime options resolved from CLI flags or env
-	ConfigFile  string   `yaml:"-"`
-	ShowVersion bool     `yaml:"-"`
-	RunServer   bool     `yaml:"-"`
-	MonthsBack  int      `yaml:"-"`
-	StartDate   string   `yaml:"-"`
-	EndDate     string   `yaml:"-"`
-	MetricsList []string `yaml:"-"`
-	CompareMoM  bool     `yaml:"-"`
-	MockMode    bool     `yaml:"-"`
-	Filters     []string `yaml:"filters"`
-	NoColor     bool     `yaml:"no_color"`
+	ConfigFile      string   `yaml:"-"`
+	ShowVersion     bool     `yaml:"-"`
+	RunServer       bool     `yaml:"-"`
+	MonthsBack      int      `yaml:"-"`
+	StartDate       string   `yaml:"-"`
+	EndDate         string   `yaml:"-"`
+	MetricsList     []string `yaml:"-"`
+	CompareMoM      bool     `yaml:"-"`
+	MockMode        bool     `yaml:"-"`
+	Filters         []string `yaml:"filters"`
+	NoColor         bool     `yaml:"no_color"`
+	OutputFile      string   `yaml:"output_file"`
+	JSONSummaryFile string   `yaml:"json_summary_file"`
 }
 
 // DefaultsConfig represents default billing query parameters.
@@ -112,6 +114,7 @@ func LoadConfig(args []string) (*Config, error) {
 		minCost      = fs.Float64("min-cost", -1.0, "Minimum display cost threshold (e.g. 0.01)")
 		compareMoM   = fs.Bool("compare", false, "Compare Month-over-Month with preceding period")
 		failThresh   = fs.Float64("fail-on-threshold", -1.0, "Terminate with exit code 1 if total cost exceeds this threshold")
+		threshAlias  = fs.Float64("threshold", -1.0, "Alias for --fail-on-threshold")
 		format       = fs.String("format", "", "Output format: table, markdown, json, csv")
 		writeSummary = fs.Bool("write-summary", true, "Write markdown report to $GITHUB_STEP_SUMMARY when set")
 		mockMode     = fs.Bool("mock", false, "Run in offline mock mode with simulated billing data")
@@ -119,6 +122,9 @@ func LoadConfig(args []string) (*Config, error) {
 		filterFlag   = fs.String("filter", "", "Filter services by comma-separated substring (e.g. DynamoDB,Lambda)")
 		serviceFlag  = fs.String("service", "", "Alias for --filter")
 		noColorFlag  = fs.Bool("no-color", false, "Disable ANSI color output in terminal tables")
+		outputFlag   = fs.String("output", "", "Optional file path to write report output")
+		outputSh     = fs.String("o", "", "Optional file path to write report output (shorthand)")
+		jsonSumFlag  = fs.String("json-summary", "", "Optional file path to write machine-readable summary JSON")
 	)
 
 	if err := fs.Parse(args); err != nil {
@@ -203,8 +209,22 @@ func LoadConfig(args []string) (*Config, error) {
 		cfg.CompareMoM = true
 	}
 
+	if *threshAlias >= 0.0 && *failThresh < 0.0 {
+		*failThresh = *threshAlias
+	}
+
 	if *failThresh >= 0.0 {
 		cfg.Budget.FailOnThreshold = *failThresh
+	}
+
+	if *outputFlag != "" {
+		cfg.OutputFile = *outputFlag
+	} else if *outputSh != "" {
+		cfg.OutputFile = *outputSh
+	}
+
+	if *jsonSumFlag != "" {
+		cfg.JSONSummaryFile = *jsonSumFlag
 	}
 
 	if *format != "" {
