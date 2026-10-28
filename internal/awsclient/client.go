@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"math/rand"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -80,10 +82,44 @@ func (c *Client) GenerateReport(ctx context.Context, cfg *config.Config, now tim
 		return nil, fmt.Errorf("failed to resolve time period: %w", err)
 	}
 
-	// 3. Fetch current period costs
-	currentTotals, currentItems, err := c.fetchCostData(ctx, cfg, dateRange)
-	if err != nil {
-		return nil, err
+	// 3. Fetch period costs (concurrently if comparison is enabled)
+	var (
+		currentTotals TotalCosts
+		currentItems  []LineItem
+		prevTotals    TotalCosts
+		prevItems     []LineItem
+		errCurr       error
+		errPrev       error
+	)
+
+	if cfg.CompareMoM {
+		prevDateRange := ResolvePreviousPeriod(dateRange)
+		var wg sync.WaitGroup
+		wg.Add(2)
+
+		go func() {
+			defer wg.Done()
+			currentTotals, currentItems, errCurr = c.fetchCostData(ctx, cfg, dateRange)
+		}()
+
+		go func() {
+			defer wg.Done()
+			prevTotals, prevItems, errPrev = c.fetchCostData(ctx, cfg, prevDateRange)
+		}()
+
+		wg.Wait()
+
+		if errCurr != nil {
+			return nil, errCurr
+		}
+		if errPrev != nil {
+			return nil, fmt.Errorf("failed to fetch comparison period: %w", errPrev)
+		}
+	} else {
+		currentTotals, currentItems, errCurr = c.fetchCostData(ctx, cfg, dateRange)
+		if errCurr != nil {
+			return nil, errCurr
+		}
 	}
 
 	report := &CostReport{
@@ -108,14 +144,9 @@ func (c *Client) GenerateReport(ctx context.Context, cfg *config.Config, now tim
 		report.Metadata.EstimatedOrFinal = "Estimated"
 	}
 
-	// 4. Handle Month-over-Month comparison
+	// 4. Handle Month-over-Month comparison data mapping
 	if cfg.CompareMoM {
 		report.HasComparison = true
-		prevDateRange := ResolvePreviousPeriod(dateRange)
-		prevTotals, prevItems, err := c.fetchCostData(ctx, cfg, prevDateRange)
-		if err != nil {
-			return nil, fmt.Errorf("failed to fetch comparison period: %w", err)
-		}
 
 		// Calculate Totals Delta
 		report.Totals.PrevUnblendedCost = prevTotals.UnblendedCost
@@ -170,9 +201,12 @@ func (c *Client) GenerateReport(ctx context.Context, cfg *config.Config, now tim
 		}
 	}
 
-	// 5. Filter items below min_display_cost
+	// 5. Filter items by min_display_cost and user-specified name filter
 	var filtered []LineItem
 	for _, item := range report.Items {
+		if len(cfg.Filters) > 0 && !matchesFilter(item.Name, cfg.Filters) {
+			continue
+		}
 		maxCost := math.Max(item.UnblendedCost, math.Max(item.BlendedCost, item.AmortizedCost))
 		if item.HasPreviousCost {
 			maxCost = math.Max(maxCost, item.PrevUnblendedCost)
@@ -233,7 +267,7 @@ func (c *Client) fetchCostData(ctx context.Context, cfg *config.Config, dateRang
 			NextPageToken: nextPageToken,
 		}
 
-		output, err := c.ceClient.GetCostAndUsage(ctx, input)
+		output, err := c.getCostAndUsageWithRetry(ctx, input)
 		if err != nil {
 			return totals, nil, fmt.Errorf("AWS Cost Explorer GetCostAndUsage failed: %w", err)
 		}
@@ -330,6 +364,9 @@ func GenerateMockReport(cfg *config.Config, now time.Time) (*CostReport, error) 
 
 	var filtered []LineItem
 	for _, item := range items {
+		if len(cfg.Filters) > 0 && !matchesFilter(item.Name, cfg.Filters) {
+			continue
+		}
 		if item.UnblendedCost >= cfg.Defaults.MinDisplayCost {
 			filtered = append(filtered, item)
 		}
@@ -377,4 +414,48 @@ func parseFloat(val string) float64 {
 
 func roundToTwo(val float64) float64 {
 	return math.Round(val*100) / 100
+}
+
+func matchesFilter(name string, filters []string) bool {
+	lower := strings.ToLower(name)
+	for _, f := range filters {
+		if strings.Contains(lower, strings.ToLower(f)) {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *Client) getCostAndUsageWithRetry(ctx context.Context, input *costexplorer.GetCostAndUsageInput) (*costexplorer.GetCostAndUsageOutput, error) {
+	maxRetries := 5
+	backoff := 300 * time.Millisecond
+
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		out, err := c.ceClient.GetCostAndUsage(ctx, input)
+		if err == nil {
+			return out, nil
+		}
+
+		if attempt == maxRetries {
+			return nil, err
+		}
+
+		errStr := err.Error()
+		if strings.Contains(errStr, "LimitExceededException") ||
+			strings.Contains(errStr, "Throttling") ||
+			strings.Contains(errStr, "TooManyRequests") ||
+			strings.Contains(errStr, "429") {
+			sleepDur := backoff + time.Duration(rand.Intn(200))*time.Millisecond
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(sleepDur):
+			}
+			backoff *= 2
+			continue
+		}
+
+		return nil, err
+	}
+	return nil, fmt.Errorf("exhausted retries")
 }

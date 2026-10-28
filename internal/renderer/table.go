@@ -15,7 +15,7 @@ const (
 )
 
 // RenderTable formats the CostReport as a fixed-width terminal ASCII table.
-func RenderTable(w io.Writer, r *awsclient.CostReport) error {
+func RenderTable(w io.Writer, r *awsclient.CostReport, noColor bool) error {
 	var b strings.Builder
 
 	// Header banner
@@ -42,9 +42,22 @@ func RenderTable(w io.Writer, r *awsclient.CostReport) error {
 	if r.HasComparison {
 		b.WriteString(fmt.Sprintf(" %-18s | %18s | %18s | %18s | %16s\n", "Metric", "Amount ("+r.Metadata.Currency+")", "Prev ("+r.Metadata.Currency+")", "Diff ($)", "% Δ"))
 		b.WriteString(divSingle + "\n")
-		b.WriteString(fmt.Sprintf(" %-18s | %18.2f | %18.2f | %18.2f | %15.2f%%\n", "Unblended Cost", r.Totals.UnblendedCost, r.Totals.PrevUnblendedCost, r.Totals.MoMDeltaAmount, r.Totals.MoMDeltaPercent))
-		b.WriteString(fmt.Sprintf(" %-18s | %18.2f | %18.2f | %18.2f | %15.2f%%\n", "Blended Cost", r.Totals.BlendedCost, r.Totals.PrevBlendedCost, r.Totals.BlendedCost-r.Totals.PrevBlendedCost, calcPercent(r.Totals.BlendedCost, r.Totals.PrevBlendedCost)))
-		b.WriteString(fmt.Sprintf(" %-18s | %18.2f | %18.2f | %18.2f | %15.2f%%\n", "Amortized Cost", r.Totals.AmortizedCost, r.Totals.PrevAmortizedCost, r.Totals.AmortizedCost-r.Totals.PrevAmortizedCost, calcPercent(r.Totals.AmortizedCost, r.Totals.PrevAmortizedCost)))
+
+		unblendedDiffStr := colorize(r.Totals.MoMDeltaAmount, fmt.Sprintf("%18.2f", r.Totals.MoMDeltaAmount), noColor)
+		unblendedPctStr := colorize(r.Totals.MoMDeltaPercent, fmt.Sprintf("%15.2f%%", r.Totals.MoMDeltaPercent), noColor)
+		b.WriteString(fmt.Sprintf(" %-18s | %18.2f | %18.2f | %s | %s\n", "Unblended Cost", r.Totals.UnblendedCost, r.Totals.PrevUnblendedCost, unblendedDiffStr, unblendedPctStr))
+
+		blendedDiff := r.Totals.BlendedCost - r.Totals.PrevBlendedCost
+		blendedPct := calcPercent(r.Totals.BlendedCost, r.Totals.PrevBlendedCost)
+		blendedDiffStr := colorize(blendedDiff, fmt.Sprintf("%18.2f", blendedDiff), noColor)
+		blendedPctStr := colorize(blendedPct, fmt.Sprintf("%15.2f%%", blendedPct), noColor)
+		b.WriteString(fmt.Sprintf(" %-18s | %18.2f | %18.2f | %s | %s\n", "Blended Cost", r.Totals.BlendedCost, r.Totals.PrevBlendedCost, blendedDiffStr, blendedPctStr))
+
+		amortDiff := r.Totals.AmortizedCost - r.Totals.PrevAmortizedCost
+		amortPct := calcPercent(r.Totals.AmortizedCost, r.Totals.PrevAmortizedCost)
+		amortDiffStr := colorize(amortDiff, fmt.Sprintf("%18.2f", amortDiff), noColor)
+		amortPctStr := colorize(amortPct, fmt.Sprintf("%15.2f%%", amortPct), noColor)
+		b.WriteString(fmt.Sprintf(" %-18s | %18.2f | %18.2f | %s | %s\n", "Amortized Cost", r.Totals.AmortizedCost, r.Totals.PrevAmortizedCost, amortDiffStr, amortPctStr))
 	} else {
 		b.WriteString(fmt.Sprintf(" %-18s | %18s\n", "Metric", "Amount ("+r.Metadata.Currency+")"))
 		b.WriteString(divSingle + "\n")
@@ -73,14 +86,19 @@ func RenderTable(w io.Writer, r *awsclient.CostReport) error {
 			if item.MoMDeltaPercent < 0 {
 				pctSign = ""
 			}
-			b.WriteString(fmt.Sprintf(" %-46s | %16.2f | %16.2f | %9s%0.2f | %7s%0.2f%%\n",
+
+			rawDiff := fmt.Sprintf("%9s%0.2f", diffSign, item.MoMDeltaAmount)
+			rawPct := fmt.Sprintf("%7s%0.2f%%", pctSign, item.MoMDeltaPercent)
+
+			coloredDiff := colorize(item.MoMDeltaAmount, rawDiff, noColor)
+			coloredPct := colorize(item.MoMDeltaPercent, rawPct, noColor)
+
+			b.WriteString(fmt.Sprintf(" %-46s | %16.2f | %16.2f | %s | %s\n",
 				truncate(item.Name, 46),
 				item.UnblendedCost,
 				item.PrevUnblendedCost,
-				diffSign,
-				item.MoMDeltaAmount,
-				pctSign,
-				item.MoMDeltaPercent,
+				coloredDiff,
+				coloredPct,
 			))
 		}
 	} else {
@@ -99,6 +117,16 @@ func RenderTable(w io.Writer, r *awsclient.CostReport) error {
 
 	_, err := io.WriteString(w, b.String())
 	return err
+}
+
+func colorize(val float64, s string, noColor bool) string {
+	if noColor || val == 0 {
+		return s
+	}
+	if val < 0 {
+		return "\033[32m" + s + "\033[0m" // green for decrease/savings
+	}
+	return "\033[31m" + s + "\033[0m" // red for increase
 }
 
 func truncate(s string, maxLen int) string {

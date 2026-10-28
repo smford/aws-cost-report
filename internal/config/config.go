@@ -28,6 +28,8 @@ type Config struct {
 	MetricsList []string `yaml:"-"`
 	CompareMoM  bool     `yaml:"-"`
 	MockMode    bool     `yaml:"-"`
+	Filters     []string `yaml:"filters"`
+	NoColor     bool     `yaml:"no_color"`
 }
 
 // DefaultsConfig represents default billing query parameters.
@@ -114,6 +116,9 @@ func LoadConfig(args []string) (*Config, error) {
 		writeSummary = fs.Bool("write-summary", true, "Write markdown report to $GITHUB_STEP_SUMMARY when set")
 		mockMode     = fs.Bool("mock", false, "Run in offline mock mode with simulated billing data")
 		serverMode   = fs.Bool("server", false, "Run as an HTTP service daemon exposing /healthz and /report")
+		filterFlag   = fs.String("filter", "", "Filter services by comma-separated substring (e.g. DynamoDB,Lambda)")
+		serviceFlag  = fs.String("service", "", "Alias for --filter")
+		noColorFlag  = fs.Bool("no-color", false, "Disable ANSI color output in terminal tables")
 	)
 
 	if err := fs.Parse(args); err != nil {
@@ -210,6 +215,28 @@ func LoadConfig(args []string) (*Config, error) {
 	cfg.MockMode = *mockMode
 	if *serverMode || cfg.Server.Enabled || cfg.Server.Port > 0 {
 		cfg.RunServer = true
+	}
+
+	rawFilter := *filterFlag
+	if rawFilter == "" {
+		rawFilter = *serviceFlag
+	}
+	if rawFilter != "" {
+		parts := strings.Split(rawFilter, ",")
+		var cleaned []string
+		for _, p := range parts {
+			trimmed := strings.TrimSpace(p)
+			if trimmed != "" {
+				cleaned = append(cleaned, trimmed)
+			}
+		}
+		if len(cleaned) > 0 {
+			cfg.Filters = cleaned
+		}
+	}
+
+	if *noColorFlag || os.Getenv("NO_COLOR") != "" || os.Getenv("TERM") == "dumb" {
+		cfg.NoColor = true
 	}
 
 	return cfg, nil

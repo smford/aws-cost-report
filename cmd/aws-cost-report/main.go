@@ -88,7 +88,7 @@ func runCLI(cfg *config.Config) {
 			os.Exit(1)
 		}
 	default:
-		if err := renderer.RenderTable(os.Stdout, report); err != nil {
+		if err := renderer.RenderTable(os.Stdout, report, cfg.NoColor); err != nil {
 			fmt.Fprintf(os.Stderr, "Error rendering table: %v\n", err)
 			os.Exit(1)
 		}
@@ -152,7 +152,7 @@ func runServer(cfg *config.Config) {
 			_ = renderer.RenderMarkdown(w, report, false)
 		case "table":
 			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-			_ = renderer.RenderTable(w, report)
+			_ = renderer.RenderTable(w, report, true)
 		case "csv":
 			w.Header().Set("Content-Type", "text/csv; charset=utf-8")
 			_ = renderer.RenderCSV(w, report)

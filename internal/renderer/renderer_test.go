@@ -22,7 +22,7 @@ func getTestReport(hasComparison bool) *awsclient.CostReport {
 func TestRenderTable(t *testing.T) {
 	report := getTestReport(false)
 	var buf bytes.Buffer
-	err := RenderTable(&buf, report)
+	err := RenderTable(&buf, report, true)
 	if err != nil {
 		t.Fatalf("RenderTable failed: %v", err)
 	}
@@ -45,7 +45,7 @@ func TestRenderTable(t *testing.T) {
 func TestRenderTableWithComparison(t *testing.T) {
 	report := getTestReport(true)
 	var buf bytes.Buffer
-	err := RenderTable(&buf, report)
+	err := RenderTable(&buf, report, true)
 	if err != nil {
 		t.Fatalf("RenderTable with comparison failed: %v", err)
 	}
@@ -53,6 +53,21 @@ func TestRenderTableWithComparison(t *testing.T) {
 	out := buf.String()
 	if !strings.Contains(out, "Diff ($)") || !strings.Contains(out, "% Δ") {
 		t.Errorf("expected comparison columns in table output")
+	}
+}
+
+func TestRenderTableColors(t *testing.T) {
+	report := getTestReport(true)
+	var buf bytes.Buffer
+	err := RenderTable(&buf, report, false)
+	if err != nil {
+		t.Fatalf("RenderTable with color failed: %v", err)
+	}
+
+	out := buf.String()
+	// Should contain ANSI color codes
+	if !strings.Contains(out, "\033[31m") && !strings.Contains(out, "\033[32m") {
+		t.Errorf("expected ANSI color codes in colored table output")
 	}
 }
 
