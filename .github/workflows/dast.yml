@@ -1,0 +1,79 @@
+name: DAST
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run weekly every Monday at 08:00 UTC (following SAST at 07:00 UTC)
+    - cron: '0 8 * * 1'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  dast-zap:
+    name: OWASP ZAP Baseline Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2 # v3.10.0
+
+      - name: Build aws-cost-report container image
+        uses: docker/build-push-action@471d1dc4e07e5cdedd4c2171150001c434f0b7a4 # v6.15.0
+        with:
+          context: .
+          load: true
+          push: false
+          tags: aws-cost-report:dast
+
+      - name: Start aws-cost-report service container
+        run: |
+          docker run -d \
+            --name aws-cost-report-service \
+            --network host \
+            -v "${{ github.workspace }}/.zap/dast-config.yaml:/etc/aws-cost-report/aws-cost-report.yaml:ro" \
+            aws-cost-report:dast
+
+      - name: Verify aws-cost-report service readiness
+        run: |
+          echo "Waiting for aws-cost-report service to become healthy..."
+          for i in {1..30}; do
+            if curl -sf http://127.0.0.1:8080/healthz; then
+              echo "aws-cost-report service is healthy and ready!"
+              exit 0
+            fi
+            echo "Waiting for service (attempt $i/30)..."
+            sleep 1
+          done
+          echo "Timed out waiting for aws-cost-report service"
+          docker logs aws-cost-report-service
+          exit 1
+
+      - name: Run OWASP ZAP Baseline Scan
+        uses: zaproxy/action-baseline@de8ad967d3548d44ef623df22cf95c3b0baf8b25 # v0.15.0
+        with:
+          target: 'http://localhost:8080'
+          rules_file_name: '.zap/rules.tsv'
+          cmd_options: '-m 3 -T 5'
+          fail_action: false
+          allow_issue_writing: false
+          artifact_name: 'zap-baseline-report'
+
+      - name: Stop aws-cost-report service container
+        if: always()
+        run: |
+          echo "Container logs:"
+          docker logs aws-cost-report-service || true
+          docker stop aws-cost-report-service || true
+          docker rm -f aws-cost-report-service || true

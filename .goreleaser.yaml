@@ -1,0 +1,98 @@
+version: 2
+
+project_name: aws-cost-report
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: aws-cost-report
+    main: ./cmd/aws-cost-report
+    binary: aws-cost-report
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+
+archives:
+  - id: default
+    formats:
+      - tar.gz
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    files:
+      - LICENSE*
+      - README*
+      - config.example.yaml
+      - docs/*
+
+dockers_v2:
+  - id: aws-cost-report
+    images:
+      - "ghcr.io/smford/aws-cost-report"
+    tags:
+      - "latest"
+      - "{{ .Tag }}"
+      - "v{{ .Major }}.{{ .Minor }}"
+      - "v{{ .Major }}"
+    dockerfile: Dockerfile.goreleaser
+    platforms:
+      - linux/amd64
+      - linux/arm64
+
+checksum:
+  name_template: 'checksums.txt'
+
+signs:
+  - id: cosign
+    cmd: cosign
+    artifacts: checksum
+    certificate: '${artifact}.pem'
+    args:
+      - "sign-blob"
+      - "--yes"
+      - "--output-certificate=${certificate}"
+      - "--output-signature=${signature}"
+      - "${artifact}"
+    output: true
+
+docker_signs:
+  - id: cosign
+    cmd: cosign
+    artifacts: all
+    args:
+      - "sign"
+      - "--yes"
+      - "${artifact}"
+    output: true
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - Merge pull request
+      - Merge branch
+
+release:
+  github:
+    owner: smford
+    name: aws-cost-report
+  draft: false
+  prerelease: auto
+  mode: replace
+  header: |
+    ## aws-cost-report {{ .Tag }} ({{ .Date }})
+
+    Welcome to the latest release of `aws-cost-report`!

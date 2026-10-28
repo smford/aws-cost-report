@@ -1,0 +1,8 @@
+# Semgrep ignore rules for aws-cost-report
+*.test
+*.out
+coverage.out
+dist/
+build/
+bin/
+vendor/

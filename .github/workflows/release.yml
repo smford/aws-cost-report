@@ -1,0 +1,103 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+  packages: write
+  id-token: write
+
+jobs:
+  goreleaser:
+    name: Build & Publish Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@f111f3307d8850f501ac008e886eec1fd1932a34 # v5.3.0
+        with:
+          go-version-file: 'go.mod'
+          check-latest: true
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3.6.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2 # v3.10.0
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@3454372f43399081ed03b604cb2d021dabca52bb # v3.8.2
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@90a3faa9d0182683851fbfa97ca1a2cb983bfca3 # v6.2.1
+        with:
+          distribution: goreleaser
+          version: '~> v2'
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate Homebrew Formula
+        id: formula
+        run: |
+          TAG_NAME="${GITHUB_REF#refs/tags/}"
+          VERSION="${TAG_NAME#v}"
+          echo "tag=${TAG_NAME}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          chmod +x scripts/generate_formula.sh
+          ./scripts/generate_formula.sh "$VERSION" "$TAG_NAME" "dist" "dist/aws-cost-report.rb"
+
+      - name: Upload Formula to Release Assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ steps.formula.outputs.tag }}
+        run: |
+          gh release upload "$TAG_NAME" dist/aws-cost-report.rb --clobber
+
+      - name: Publish Homebrew Formula to Tap
+        env:
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+          TAG_NAME: ${{ steps.formula.outputs.tag }}
+        run: |
+          if [ -n "${TAP_TOKEN}" ]; then
+            echo "Publishing updated formula to smford/homebrew-tap..."
+            git config --global user.name "github-actions[bot]"
+            git config --global user.email "github-actions[bot]@users.noreply.github.com"
+            git clone "https://x-access-token:${TAP_TOKEN}@github.com/smford/homebrew-tap.git" tap_repo
+            mkdir -p tap_repo/Formula
+            cp dist/aws-cost-report.rb tap_repo/Formula/aws-cost-report.rb
+            cd tap_repo
+            git add Formula/aws-cost-report.rb
+            if git commit -m "feat(formula): update aws-cost-report to ${TAG_NAME}"; then
+              git push origin main
+              echo "Successfully pushed formula update to smford/homebrew-tap"
+            else
+              echo "Formula in tap is already up to date"
+            fi
+            cd ..
+            rm -rf tap_repo
+          else
+            echo "::warning::HOMEBREW_TAP_GITHUB_TOKEN secret is not set. Formula available in release assets."
+          fi
+
+      - name: Trigger GitHub Pages Deployment
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ steps.formula.outputs.tag }}
+        run: |
+          echo "Triggering GitHub Pages deployment for ${TAG_NAME}..."
+          gh workflow run pages.yml -f version="${TAG_NAME}" || true

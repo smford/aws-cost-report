@@ -1,0 +1,9 @@
+server:
+  host: "0.0.0.0"
+  port: 8080
+  read_timeout: 10s
+  write_timeout: 15s
+
+aws:
+  region: "us-east-1"
+  mock: true
