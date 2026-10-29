@@ -165,3 +165,28 @@ func TestRunCLIMockMode(t *testing.T) {
 		t.Errorf("expected threshold_breached false in json summary")
 	}
 }
+
+func TestFormatHelp(t *testing.T) {
+	helpText := formatHelp()
+	if !strings.Contains(helpText, "COMMANDS:") {
+		t.Errorf("expected COMMANDS section in help text")
+	}
+	if !strings.Contains(helpText, "generate") {
+		t.Errorf("expected generate command in help text")
+	}
+	if !strings.Contains(helpText, "services") {
+		t.Errorf("expected services command in help text")
+	}
+	if !strings.Contains(helpText, "server") {
+		t.Errorf("expected server command in help text")
+	}
+}
+
+func TestRunListServicesMock(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.MockMode = true
+	cfg.Reporting.Format = "json"
+
+	// Should not panic or error
+	runListServices(cfg)
+}

@@ -38,10 +38,112 @@ func printVersion() {
 	fmt.Print(formatVersion())
 }
 
+func formatHelp() string {
+	return `aws-cost-report - AWS Cost Explorer reporting, Month-over-Month deltas, and CI/CD budget guardrails
+
+USAGE:
+  aws-cost-report <command> [flags]
+
+COMMANDS:
+  generate          Generate monthly billing and usage cost report (default)
+  services          List official AWS Cost Explorer service names available in your account
+  server            Run as an HTTP service daemon exposing /healthz, /readyz, and /report
+  version           Print application version metadata and exit
+  help              Display this help message
+
+GENERATE FLAGS:
+  --compare               Compare Month-over-Month with preceding billing period
+  --format <string>       Output format: table (default), markdown, json, csv
+  --months <int>          Number of historical complete months back to query (default: 1)
+  --start <YYYY-MM-DD>    Explicit billing start date (inclusive)
+  --end <YYYY-MM-DD>      Explicit billing end date (inclusive)
+  --group-by <dim>        Grouping dimension: SERVICE (default), LINKED_ACCOUNT, or TAG:<Key>
+  --filter <names>        Filter services by official name, alias, or substring (e.g. 'Amazon DynamoDB', 'S3', 'Lambda')
+  --threshold <float>     SRE budget alert threshold dollar amount. Exits with code 1 if exceeded
+  --top <int>             Display top N highest cost drivers and aggregate remainder into "Other"
+  --min-cost <float>      Minimum cost floor to display in itemized breakdown (default: 0.01)
+  --output, -o <path>     Write formatted report output to specified file
+  --json-summary <path>   Write machine-readable summary metrics to JSON file
+  --slack-webhook <url>   Post formatted Block Kit report to incoming Slack webhook
+  --no-color              Disable ANSI colors in terminal tables (honors NO_COLOR=1)
+  --mock                  Run in offline mode with simulated AWS billing data
+  --config, -c <path>     Path to YAML configuration file (default: config.yaml)
+
+EXAMPLES:
+  # 1. Print standard billing report for previous month
+  aws-cost-report generate
+
+  # 2. Compare Month-over-Month spend with colorized delta indicators
+  aws-cost-report generate --compare
+
+  # 3. Filter specific services using official AWS Cost Explorer names or substrings
+  aws-cost-report generate --filter="Amazon DynamoDB,AWS Lambda"
+
+  # 4. Filter using common service aliases (e.g. S3, EC2, KMS)
+  aws-cost-report generate --filter="S3,EC2"
+
+  # 5. List all official AWS service names available in Cost Explorer
+  aws-cost-report services
+
+  # 6. Top 5 cost drivers with remainder aggregated into "Other Services"
+  aws-cost-report generate --compare --top=5
+
+  # 7. CI/CD budget guardrail in GitHub Actions with Step Summary
+  aws-cost-report generate --compare --format=markdown --threshold=500.00
+
+  # 8. Offline test mode without AWS credentials
+  aws-cost-report generate --mock --compare
+
+  # 9. Start HTTP microservice daemon
+  aws-cost-report server --port=8080
+
+Use "aws-cost-report <command> --help" for more information about a command.
+`
+}
+
+func printHelp() {
+	fmt.Print(formatHelp())
+}
+
 func main() {
-	cfg, err := config.LoadConfig(os.Args[1:])
+	args := os.Args[1:]
+
+	// If no arguments are passed, immediately display help and exit cleanly (no AWS auth pause!)
+	if len(args) == 0 {
+		printHelp()
+		os.Exit(0)
+	}
+
+	cmd := args[0]
+	var cmdArgs []string
+
+	switch cmd {
+	case "help", "-h", "--help":
+		printHelp()
+		os.Exit(0)
+	case "version", "-v", "--version":
+		printVersion()
+		os.Exit(0)
+	case "generate":
+		cmdArgs = args[1:]
+	case "services", "list-services", "--services", "--list-services":
+		cmd = "services"
+		cmdArgs = args[1:]
+	case "server":
+		cmdArgs = args[1:]
+	default:
+		if strings.HasPrefix(cmd, "-") {
+			cmdArgs = args
+		} else {
+			fmt.Fprintf(os.Stderr, "Error: unknown command %q\nRun 'aws-cost-report help' for usage.\n", cmd)
+			os.Exit(1)
+		}
+	}
+
+	cfg, err := config.LoadConfig(cmdArgs)
 	if err != nil {
 		if errors.Is(err, flag.ErrHelp) {
+			printHelp()
 			os.Exit(0)
 		}
 		fmt.Fprintf(os.Stderr, "Error parsing configuration: %v\n", err)
@@ -53,12 +155,51 @@ func main() {
 		os.Exit(0)
 	}
 
-	if cfg.RunServer {
+	if cmd == "server" || cfg.RunServer {
 		runServer(cfg)
 		return
 	}
 
+	if cmd == "services" || cfg.ListServices {
+		runListServices(cfg)
+		return
+	}
+
 	runCLI(cfg)
+}
+
+func runListServices(cfg *config.Config) {
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancel()
+
+	var client *awsclient.Client
+	if cfg.MockMode {
+		client = awsclient.NewClient(nil, nil)
+	} else {
+		var err error
+		client, err = awsclient.NewRealClient(ctx)
+		if err != nil {
+			printCredentialHelp(err)
+			os.Exit(1)
+		}
+	}
+
+	services, err := client.ListServices(ctx, cfg, time.Now())
+	if err != nil {
+		printCredentialHelp(err)
+		os.Exit(1)
+	}
+
+	if cfg.Reporting.Format == "json" {
+		_ = json.NewEncoder(os.Stdout).Encode(services)
+		return
+	}
+
+	fmt.Println("Official AWS Cost Explorer Service Names:")
+	for _, s := range services {
+		fmt.Printf("  • %s\n", s)
+	}
+	fmt.Printf("\nTotal: %d services available.\nUse these exact names, aliases, or substrings with --filter (e.g. --filter=%q)\n", len(services), services[0])
 }
 
 func runCLI(cfg *config.Config) {

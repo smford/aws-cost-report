@@ -23,6 +23,7 @@ import (
 // CostExplorerAPI defines the required Cost Explorer client interface for pagination and mockability.
 type CostExplorerAPI interface {
 	GetCostAndUsage(ctx context.Context, params *costexplorer.GetCostAndUsageInput, optFns ...func(*costexplorer.Options)) (*costexplorer.GetCostAndUsageOutput, error)
+	GetDimensionValues(ctx context.Context, params *costexplorer.GetDimensionValuesInput, optFns ...func(*costexplorer.Options)) (*costexplorer.GetDimensionValuesOutput, error)
 }
 
 // STSAPI defines the required STS client interface for account identification.
@@ -455,14 +456,110 @@ func roundToTwo(val float64) float64 {
 	return math.Round(val*100) / 100
 }
 
+// commonAliases maps common AWS service abbreviations to their official Cost Explorer dimension names.
+var commonAliases = map[string]string{
+	"s3":         "Amazon Simple Storage Service",
+	"ec2":        "Amazon Elastic Compute Cloud - Compute",
+	"sns":        "Amazon Simple Notification Service",
+	"sqs":        "Amazon Simple Queue Service",
+	"kms":        "AWS Key Management Service",
+	"vpc":        "Amazon Virtual Private Cloud",
+	"cw":         "Amazon CloudWatch",
+	"cloudwatch": "Amazon CloudWatch",
+	"dynamodb":   "Amazon DynamoDB",
+	"lambda":     "AWS Lambda",
+	"cognito":    "Amazon Cognito",
+	"config":     "AWS Config",
+	"cloudtrail": "AWS CloudTrail",
+	"secrets":    "AWS Secrets Manager",
+	"step":       "AWS Step Functions",
+}
+
 func matchesFilter(name string, filters []string) bool {
-	lower := strings.ToLower(name)
+	lowerName := strings.ToLower(name)
 	for _, f := range filters {
-		if strings.Contains(lower, strings.ToLower(f)) {
+		cleanFilter := strings.ToLower(strings.TrimSpace(f))
+		if cleanFilter == "" {
+			continue
+		}
+		if strings.Contains(lowerName, cleanFilter) {
 			return true
+		}
+		if officialName, hasAlias := commonAliases[cleanFilter]; hasAlias {
+			if strings.Contains(lowerName, strings.ToLower(officialName)) {
+				return true
+			}
 		}
 	}
 	return false
+}
+
+// GetMockServices returns the official AWS Cost Explorer names for simulated services.
+func GetMockServices() []string {
+	return []string{
+		"AWS CloudTrail",
+		"AWS Config",
+		"AWS Key Management Service",
+		"AWS Lambda",
+		"AWS Secrets Manager",
+		"AWS Step Functions",
+		"Amazon CloudWatch",
+		"Amazon Cognito",
+		"Amazon DynamoDB",
+		"Amazon Elastic Compute Cloud - Compute",
+		"Amazon Route 53",
+		"Amazon Simple Notification Service",
+		"Amazon Simple Storage Service",
+		"Amazon Virtual Private Cloud",
+		"Tax",
+	}
+}
+
+// ListServices retrieves official AWS Cost Explorer service names.
+func (c *Client) ListServices(ctx context.Context, cfg *config.Config, now time.Time) ([]string, error) {
+	if cfg.MockMode || c.ceClient == nil {
+		return GetMockServices(), nil
+	}
+
+	dateRange, err := ResolveTimePeriod(now, cfg.MonthsBack, cfg.StartDate, cfg.EndDate)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve time period: %w", err)
+	}
+
+	timePeriod := &cetypes.DateInterval{
+		Start: aws.String(dateRange.Start.Format(DateFormat)),
+		End:   aws.String(dateRange.EndExclusiveAWS.Format(DateFormat)),
+	}
+
+	var services []string
+	var nextPageToken *string
+
+	for {
+		input := &costexplorer.GetDimensionValuesInput{
+			Dimension:     cetypes.DimensionService,
+			TimePeriod:    timePeriod,
+			NextPageToken: nextPageToken,
+		}
+
+		output, err := c.ceClient.GetDimensionValues(ctx, input)
+		if err != nil {
+			return nil, fmt.Errorf("AWS Cost Explorer GetDimensionValues failed: %w", err)
+		}
+
+		for _, item := range output.DimensionValues {
+			if item.Value != nil && *item.Value != "" {
+				services = append(services, *item.Value)
+			}
+		}
+
+		if output.NextPageToken == nil || *output.NextPageToken == "" {
+			break
+		}
+		nextPageToken = output.NextPageToken
+	}
+
+	sort.Strings(services)
+	return services, nil
 }
 
 func (c *Client) getCostAndUsageWithRetry(ctx context.Context, input *costexplorer.GetCostAndUsageInput) (*costexplorer.GetCostAndUsageOutput, error) {

@@ -72,3 +72,24 @@ brew install aws-cost-report
 
 ### Standalone Binary
 Download pre-compiled binaries from [GitHub Releases](https://github.com/smford/aws-cost-report/releases).
+
+---
+
+## CLI Usage & Commands
+
+Running `aws-cost-report` without arguments prints help instantly (zero AWS authentication pause).
+
+```bash
+# Display instant CLI help
+aws-cost-report
+
+# Generate Month-over-Month report
+aws-cost-report generate --compare
+
+# List official AWS Cost Explorer service names
+aws-cost-report services
+
+# Filter by official service names, aliases, or substrings
+aws-cost-report generate --filter="Amazon DynamoDB,AWS Lambda"
+aws-cost-report generate --filter="S3,EC2"
+```

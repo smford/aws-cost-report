@@ -28,6 +28,15 @@ func (m *mockCEClient) GetCostAndUsage(ctx context.Context, params *costexplorer
 	return &costexplorer.GetCostAndUsageOutput{}, nil
 }
 
+func (m *mockCEClient) GetDimensionValues(ctx context.Context, params *costexplorer.GetDimensionValuesInput, optFns ...func(*costexplorer.Options)) (*costexplorer.GetDimensionValuesOutput, error) {
+	return &costexplorer.GetDimensionValuesOutput{
+		DimensionValues: []cetypes.DimensionValuesWithAttributes{
+			{Value: aws.String("Amazon DynamoDB")},
+			{Value: aws.String("AWS Lambda")},
+		},
+	}, nil
+}
+
 type mockSTSClient struct {
 	accountID string
 }
@@ -168,6 +177,61 @@ func TestFilterByName(t *testing.T) {
 	}
 }
 
+func TestFilterByOfficialNameAndAlias(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.MockMode = true
+	// Test full official name "Amazon DynamoDB" and alias "s3"
+	cfg.Filters = []string{"Amazon DynamoDB", "s3"}
+
+	refTime := time.Date(2026, time.October, 28, 12, 0, 0, 0, time.UTC)
+	report, err := GenerateMockReport(cfg, refTime)
+	if err != nil {
+		t.Fatalf("GenerateMockReport with filter failed: %v", err)
+	}
+
+	if len(report.Items) != 2 {
+		t.Fatalf("expected exactly 2 filtered items, got %d", len(report.Items))
+	}
+	if report.Items[0].Name != "Amazon DynamoDB" {
+		t.Errorf("expected Amazon DynamoDB, got %s", report.Items[0].Name)
+	}
+	if report.Items[1].Name != "Amazon Simple Storage Service" {
+		t.Errorf("expected Amazon Simple Storage Service (matched via s3 alias), got %s", report.Items[1].Name)
+	}
+}
+
+func TestListServices(t *testing.T) {
+	client := NewClient(nil, nil)
+	cfg := config.DefaultConfig()
+	cfg.MockMode = true
+
+	services, err := client.ListServices(context.Background(), cfg, time.Now())
+	if err != nil {
+		t.Fatalf("ListServices failed: %v", err)
+	}
+	if len(services) == 0 {
+		t.Fatalf("expected non-empty services list")
+	}
+
+	// Verify key official AWS Cost Explorer names exist
+	foundDynamo := false
+	foundS3 := false
+	for _, s := range services {
+		if s == "Amazon DynamoDB" {
+			foundDynamo = true
+		}
+		if s == "Amazon Simple Storage Service" {
+			foundS3 = true
+		}
+	}
+	if !foundDynamo {
+		t.Errorf("expected 'Amazon DynamoDB' in services list")
+	}
+	if !foundS3 {
+		t.Errorf("expected 'Amazon Simple Storage Service' in services list")
+	}
+}
+
 type throttlingCEClient struct {
 	attempts int
 }
@@ -186,6 +250,10 @@ func (t *throttlingCEClient) GetCostAndUsage(ctx context.Context, params *costex
 			},
 		},
 	}, nil
+}
+
+func (t *throttlingCEClient) GetDimensionValues(ctx context.Context, params *costexplorer.GetDimensionValuesInput, optFns ...func(*costexplorer.Options)) (*costexplorer.GetDimensionValuesOutput, error) {
+	return &costexplorer.GetDimensionValuesOutput{}, nil
 }
 
 func TestThrottlingRetry(t *testing.T) {

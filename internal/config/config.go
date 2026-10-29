@@ -24,6 +24,7 @@ type Config struct {
 	ConfigFile      string   `yaml:"-"`
 	ShowVersion     bool     `yaml:"-"`
 	RunServer       bool     `yaml:"-"`
+	ListServices    bool     `yaml:"-"`
 	MonthsBack      int      `yaml:"-"`
 	StartDate       string   `yaml:"-"`
 	EndDate         string   `yaml:"-"`
@@ -130,6 +131,8 @@ func LoadConfig(args []string) (*Config, error) {
 		jsonSumFlag  = fs.String("json-summary", "", "Optional file path to write machine-readable summary JSON")
 		topFlag      = fs.Int("top", 0, "Show top N highest cost items and aggregate remainder into Other")
 		slackFlag    = fs.String("slack-webhook", "", "Incoming Slack webhook URL to post formatted cost report")
+		servicesFlag = fs.Bool("services", false, "List official AWS Cost Explorer service names")
+		listServFlag = fs.Bool("list-services", false, "Alias for --services")
 	)
 
 	if err := fs.Parse(args); err != nil {
@@ -248,6 +251,9 @@ func LoadConfig(args []string) (*Config, error) {
 	cfg.MockMode = *mockMode
 	if *serverMode || cfg.Server.Enabled || cfg.Server.Port > 0 {
 		cfg.RunServer = true
+	}
+	if *servicesFlag || *listServFlag {
+		cfg.ListServices = true
 	}
 
 	rawFilter := *filterFlag

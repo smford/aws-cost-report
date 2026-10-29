@@ -118,63 +118,95 @@ go install github.com/smford/aws-cost-report/cmd/aws-cost-report@latest
 
 ---
 
-## Quickstart & Worked Examples
+## Quickstart & Commands
 
-### 1. Basic Report (Previous Complete Month)
-By default, queries the last completed calendar month across all active services:
+Running `aws-cost-report` without arguments prints the help message instantly with zero network latency (no AWS authentication attempt or pause).
 
 ```bash
+# Print instant CLI help and available options
 aws-cost-report
+```
+
+### 1. Generate Report (Previous Complete Month)
+To initiate a report, pass the `generate` command. By default, it queries the last completed calendar month:
+
+```bash
+aws-cost-report generate
 ```
 
 ### 2. Month-over-Month Comparison
 Calculates absolute delta and percentage shift compared to the preceding period:
 
 ```bash
-aws-cost-report --compare
+aws-cost-report generate --compare
 ```
 
-### 3. Service Filtering
-Focus on specific workloads or services:
+### 3. List Official AWS Service Names
+AWS Cost Explorer uses official service identifiers (such as `Amazon DynamoDB`, `AWS Lambda`, and `Amazon Simple Storage Service`). You can list all official names available in your account or environment:
 
 ```bash
-aws-cost-report --filter="DynamoDB,Lambda,S3"
+# List all available official AWS Cost Explorer service names
+aws-cost-report services
+
+# In offline mock mode
+aws-cost-report services --mock
 ```
 
-### 4. Group by Tag or Linked Account
+### 4. Service Filtering & Aliases
+Focus on specific workloads. You can filter using **official full names**, **common abbreviations**, or **case-insensitive substrings**:
+
+```bash
+# Using exact official AWS Cost Explorer names:
+aws-cost-report generate --filter="Amazon DynamoDB,AWS Lambda"
+
+# Using common aliases (S3, EC2, KMS, VPC, SQS, SNS, CloudWatch, etc.):
+aws-cost-report generate --filter="S3,EC2,KMS"
+
+# Using substrings:
+aws-cost-report generate --filter="DynamoDB,Lambda"
+```
+
+### 5. Group by Tag or Linked Account
 Break down costs by environment, team, or AWS Organization linked account:
 
 ```bash
 # Group by Cost Allocation Tag
-aws-cost-report --group-by="TAG:Environment"
+aws-cost-report generate --group-by="TAG:Environment"
 
-# Group by Linked Account
-aws-cost-report --group-by="LINKED_ACCOUNT"
+# Group by Linked Account (supports friendly name mapping in config.yaml)
+aws-cost-report generate --group-by="LINKED_ACCOUNT"
 ```
 
-### 5. Explicit Date Range
-Query custom date intervals:
+### 6. Top N Cost Drivers
+Highlight the largest cost drivers and consolidate all smaller workloads into `"Other Services"`:
 
 ```bash
-aws-cost-report --start=2026-08-01 --end=2026-09-30
+aws-cost-report generate --compare --top=5
 ```
 
-### 6. SRE Budget Guardrail (CI/CD Quality Gate)
+### 7. Explicit Date Range
+Query custom date intervals (for custom ranges, comparison periods match the exact duration in days):
+
+```bash
+aws-cost-report generate --start=2026-08-01 --end=2026-09-30
+```
+
+### 8. SRE Budget Guardrail (CI/CD Quality Gate)
 Exit with status code `1` if total unblended cost exceeds threshold:
 
 ```bash
-aws-cost-report --fail-on-threshold=50.00
+aws-cost-report generate --threshold=50.00
 echo $? # Returns 1 if total cost > $50.00, or 0 if within budget
 ```
 
-### 7. Export to JSON or CSV
+### 9. Export to JSON or CSV
 
 ```bash
 # JSON output for jq or downstream processing
-aws-cost-report --format=json > monthly-costs.json
+aws-cost-report generate --format=json > monthly-costs.json
 
 # CSV output for spreadsheets
-aws-cost-report --format=csv > monthly-costs.csv
+aws-cost-report generate --format=csv > monthly-costs.csv
 ```
 
 ---
@@ -306,7 +338,7 @@ jobs:
 
       - name: Run Cost Audit with Budget Guardrail
         run: |
-          aws-cost-report \
+          aws-cost-report generate \
             --compare \
             --format=markdown \
             --fail-on-threshold=500.00
@@ -401,26 +433,38 @@ To run `aws-cost-report`, the executing IAM principal requires read permissions 
 
 ## CLI Reference
 
+### Commands
+
+| Command | Description |
+|:---|:---|
+| `generate` | Generate monthly billing and usage cost report (default report engine) |
+| `services` | List official AWS Cost Explorer service names available in your account |
+| `server` | Run as an HTTP service daemon exposing `/healthz`, `/readyz`, and `/report` |
+| `version` | Display application version, commit SHA, build date, and license |
+| `help` | Display command-line usage and help information |
+
+*Note: Running `aws-cost-report` without any arguments immediately displays the help screen with zero pause or network latency.*
+
+### Command Options & Flags
+
 | Flag | Short | Default | Description |
 |:---|:---|:---|:---|
-| `--config` | `-c` | `config.yaml` | Path to YAML configuration file |
+| `--compare` | | `false` | Enable Month-over-Month (MoM) comparison against preceding billing period |
+| `--format` | | `table` | Output format: `table`, `markdown`, `json`, `csv` |
+| `--filter` | `--service` | | Filter services by official name (`Amazon DynamoDB`), alias (`S3`, `EC2`), or substring |
+| `--top` | | `0` | Show top N highest cost items and aggregate remainder into "Other Services" |
 | `--months` | | `1` | Number of previous complete months to analyze |
-| `--start` | | | Explicit start date (`YYYY-MM-01`) |
-| `--end` | | | Explicit end date (`YYYY-MM-01` or `YYYY-MM-DD`) |
-| `--compare` | | `false` | Enable Month-over-Month (MoM) comparison against previous period |
+| `--start` | | | Explicit billing start date (`YYYY-MM-01` or `YYYY-MM-DD`, inclusive) |
+| `--end` | | | Explicit billing end date (`YYYY-MM-01` or `YYYY-MM-DD`, inclusive) |
 | `--group-by` | | `SERVICE` | Grouping dimension (`SERVICE`, `LINKED_ACCOUNT`) or `TAG:<Key>` |
-| `--filter` | `--service` | | Comma-separated list of service name substrings to filter |
-| `--metrics` | | `UnblendedCost,BlendedCost,AmortizedCost` | Cost metrics to query or `all` |
+| `--threshold` | | `0.00` | SRE budget alert dollar threshold. Exits with code 1 if exceeded |
 | `--min-cost` | | `0.01` | Minimum cost threshold to display line items |
-| `--top` | | `0` | Show top N highest cost items and aggregate remainder into "Other" |
-| `--slack-webhook` | | | Incoming Slack webhook URL to post formatted cost report |
 | `--output` | `-o` | | Write formatted cost report to specified file path |
 | `--json-summary` | | | Write machine-readable JSON metrics summary to file path |
-| `--server` | | `false` | Run as an HTTP service daemon exposing `/healthz`, `/readyz`, and `/report` |
-| `--fail-on-threshold` | | `0.00` | Terminate with exit code 1 if total cost exceeds amount |
-| `--format` | | `table` | Output format: `table`, `markdown`, `json`, `csv` |
+| `--slack-webhook` | | | Incoming Slack webhook URL to post formatted Block Kit report |
 | `--no-color` | | `false` | Disable ANSI color codes in table deltas (also honors `NO_COLOR=1`) |
 | `--mock` | | `false` | Run in offline mode with simulated AWS billing data |
+| `--config` | `-c` | `config.yaml` | Path to YAML configuration file |
 | `--version` | `-v` | | Display version metadata and license |
 
 ---

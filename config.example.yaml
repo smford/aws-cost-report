@@ -27,3 +27,6 @@ accounts:
 
 # Optional Slack webhook integration for ChatOps
 slack_webhook: ""
+
+# Optional filters: official AWS Cost Explorer names ("Amazon DynamoDB"), common aliases ("S3", "EC2"), or substrings
+filters: []

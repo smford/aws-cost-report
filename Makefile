@@ -9,7 +9,7 @@ LDFLAGS     := -s -w \
                -X main.commit=$(COMMIT) \
                -X main.date=$(DATE)
 
-.PHONY: all help build build-linux-arm64 build-linux-amd64 clean test lint pre-commit run-mock run-compare install
+.PHONY: all help build build-linux-arm64 build-linux-amd64 clean test lint pre-commit run-mock run-compare run-services install
 
 all: build
 
@@ -21,8 +21,9 @@ help:
 	@echo "  test               Run test suite with race detector (-race)"
 	@echo "  lint               Verify code formatting (gofmt), go vet, and modules"
 	@echo "  pre-commit         Run pre-commit hooks on all files"
-	@echo "  run-mock           Run aws-cost-report with simulated mock data"
-	@echo "  run-compare        Run aws-cost-report with simulated Month-over-Month comparison"
+	@echo "  run-mock           Run aws-cost-report generate with simulated mock data"
+	@echo "  run-compare        Run aws-cost-report generate with Month-over-Month comparison"
+	@echo "  run-services       List official AWS Cost Explorer service names (mock)"
 	@echo "  install            Install binary to \$$GOPATH/bin"
 	@echo "  clean              Remove build artifacts and temporary binaries"
 
@@ -54,10 +55,13 @@ pre-commit:
 	pre-commit run --all-files
 
 run-mock: build
-	./$(BINARY_NAME) --mock
+	./$(BINARY_NAME) generate --mock
 
 run-compare: build
-	./$(BINARY_NAME) --mock --compare
+	./$(BINARY_NAME) generate --mock --compare
+
+run-services: build
+	./$(BINARY_NAME) services --mock
 
 install:
 	CGO_ENABLED=0 go install -ldflags "$(LDFLAGS)" ./cmd/aws-cost-report

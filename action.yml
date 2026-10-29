@@ -244,7 +244,11 @@ runs:
         fi
 
         set +e
-        aws-cost-report "${ARGS[@]}" > "$REPORT_TMP"
+        if aws-cost-report help 2>&1 | grep -q "generate"; then
+          aws-cost-report generate "${ARGS[@]}" > "$REPORT_TMP"
+        else
+          aws-cost-report "${ARGS[@]}" > "$REPORT_TMP"
+        fi
         EXIT_CODE=$?
         set -e
 

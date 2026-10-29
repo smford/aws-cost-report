@@ -208,7 +208,7 @@
         <div class="terminal-dot dot-red"></div>
         <div class="terminal-dot dot-yellow"></div>
         <div class="terminal-dot dot-green"></div>
-        <span class="terminal-title">aws-cost-report --compare</span>
+        <span class="terminal-title">aws-cost-report generate --compare</span>
       </div>
       <pre><code>========================================================================================================
                                    AWS MONTHLY BILLING & USAGE REPORT
@@ -297,21 +297,29 @@ brew install aws-cost-report</code></pre>
     <section id="usage">
       <h2>Usage Examples</h2>
 
-      <h3>Standard Monthly Report</h3>
+      <h3>Instant CLI Help (Zero Latency)</h3>
       <pre><code>aws-cost-report</code></pre>
 
-      <h3>Month-over-Month Delta Comparison</h3>
-      <pre><code>aws-cost-report --compare</code></pre>
+      <h3>Standard Monthly Report</h3>
+      <pre><code>aws-cost-report generate</code></pre>
 
-      <h3>Filtering by Service Name</h3>
-      <pre><code>aws-cost-report --filter="DynamoDB,Lambda"</code></pre>
+      <h3>Month-over-Month Delta Comparison</h3>
+      <pre><code>aws-cost-report generate --compare</code></pre>
+
+      <h3>List Official AWS Cost Explorer Services</h3>
+      <pre><code>aws-cost-report services</code></pre>
+
+      <h3>Filtering by Service Name or Alias</h3>
+      <pre><code>aws-cost-report generate --filter="Amazon DynamoDB,AWS Lambda"
+# Using common aliases:
+aws-cost-report generate --filter="S3,EC2,KMS"</code></pre>
 
       <h3>Budget Guardrail</h3>
-      <pre><code>aws-cost-report --fail-on-threshold=50.00
+      <pre><code>aws-cost-report generate --threshold=50.00
 # Returns exit code 1 if total cost exceeds $50.00</code></pre>
 
       <h3>GitHub Actions Job Summary</h3>
-      <pre><code>aws-cost-report --format=markdown --compare</code></pre>
+      <pre><code>aws-cost-report generate --format=markdown --compare</code></pre>
 
       <h3>SRE Workflow with Threshold Outputs</h3>
       <pre><code>- name: Run AWS Cost Report
