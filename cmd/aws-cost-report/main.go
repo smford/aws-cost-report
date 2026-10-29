@@ -48,6 +48,7 @@ COMMANDS:
   generate          Generate monthly billing and usage cost report (default)
   services          List official AWS Cost Explorer service names available in your account
   server            Run as an HTTP service daemon exposing /healthz, /readyz, /report, and /metrics
+  completion        Generate shell autocompletion script (bash, zsh, fish)
   version           Print application version metadata and exit
   help              Display this help message
 
@@ -128,6 +129,10 @@ EXAMPLES:
   # 16. Query Month-to-Date spend up to today with Month-over-Month comparison
   aws-cost-report generate --mtd --compare
 
+  # 17. Generate shell completion script for zsh or bash
+  source <(aws-cost-report completion zsh)
+  source <(aws-cost-report completion bash)
+
 Use "aws-cost-report <command> --help" for more information about a command.
 `
 }
@@ -154,6 +159,9 @@ func main() {
 		os.Exit(0)
 	case "version", "-v", "--version":
 		printVersion()
+		os.Exit(0)
+	case "completion":
+		runCompletion(args[1:])
 		os.Exit(0)
 	case "generate":
 		cmdArgs = args[1:]

@@ -366,6 +366,20 @@ aws-cost-report generate --currency=EUR
 aws-cost-report generate --currency=GBP --compare
 ```
 
+### 16. Shell Autocompletion (`completion`)
+Generate command and flag autocompletion scripts for your shell:
+
+```bash
+# Bash
+source <(aws-cost-report completion bash)
+
+# Zsh
+source <(aws-cost-report completion zsh)
+
+# Fish
+aws-cost-report completion fish | source
+```
+
 ---
 
 ## GitHub Action
@@ -616,6 +630,7 @@ To run `aws-cost-report`, the executing IAM principal requires read permissions 
 | `generate` | Generate monthly billing and usage cost report (default report engine) |
 | `services` | List official AWS Cost Explorer service names available in your account |
 | `server` | Run as an HTTP service daemon exposing `/healthz`, `/readyz`, `/report`, and `/metrics` |
+| `completion` | Generate shell autocompletion script (`bash`, `zsh`, `fish`) |
 | `version` | Display application version, commit SHA, build date, and license |
 | `help` | Display command-line usage and help information |
 

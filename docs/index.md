@@ -200,3 +200,20 @@ curl http://localhost:8080/metrics
 # Or export metrics directly via CLI
 aws-cost-report generate --format=prometheus
 ```
+
+---
+
+## Shell Autocompletion
+
+Generate dynamic autocompletion scripts for subcommands, flags, dimensions, and formats:
+
+```bash
+# Bash:
+source <(aws-cost-report completion bash)
+
+# Zsh:
+source <(aws-cost-report completion zsh)
+
+# Fish:
+aws-cost-report completion fish | source
+```

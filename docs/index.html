@@ -398,6 +398,16 @@ aws-cost-report generate --format=prometheus</code></pre>
       <h3>GitHub Actions Job Summary</h3>
       <pre><code>aws-cost-report generate --format=markdown --compare</code></pre>
 
+      <h3>Shell Autocompletion</h3>
+      <pre><code># Zsh:
+source &lt;(aws-cost-report completion zsh)
+
+# Bash:
+source &lt;(aws-cost-report completion bash)
+
+# Fish:
+aws-cost-report completion fish | source</code></pre>
+
       <h3>SRE Workflow with Threshold Outputs</h3>
       <pre><code>- name: Run AWS Cost Report
   id: cost

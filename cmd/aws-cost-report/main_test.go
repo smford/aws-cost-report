@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -307,5 +308,31 @@ func TestRunCLIMockModePrometheus(t *testing.T) {
 	}
 	if !strings.Contains(content, "aws_cost_report_service_unblended_dollars") {
 		t.Errorf("expected aws_cost_report_service_unblended_dollars in output, got:\n%s", content)
+	}
+}
+
+func TestShellCompletionGenerators(t *testing.T) {
+	// 1. Bash
+	var bashBuf bytes.Buffer
+	generateBashCompletion(&bashBuf)
+	bashScript := bashBuf.String()
+	if !strings.Contains(bashScript, "_aws_cost_report()") || !strings.Contains(bashScript, "complete -F _aws_cost_report aws-cost-report") {
+		t.Errorf("expected valid bash completion script, got:\n%s", bashScript)
+	}
+
+	// 2. Zsh
+	var zshBuf bytes.Buffer
+	generateZshCompletion(&zshBuf)
+	zshScript := zshBuf.String()
+	if !strings.Contains(zshScript, "#compdef aws-cost-report") || !strings.Contains(zshScript, "_arguments") {
+		t.Errorf("expected valid zsh completion script, got:\n%s", zshScript)
+	}
+
+	// 3. Fish
+	var fishBuf bytes.Buffer
+	generateFishCompletion(&fishBuf)
+	fishScript := fishBuf.String()
+	if !strings.Contains(fishScript, "complete -c aws-cost-report") {
+		t.Errorf("expected valid fish completion script, got:\n%s", fishScript)
 	}
 }
