@@ -38,6 +38,14 @@ inputs:
     description: 'Comma-separated substring filter for services or line items'
     required: false
     default: ''
+  tag:
+    description: 'Filter costs by AWS Cost Allocation Tag (e.g. Environment=Production or Environment=Prod,Stage)'
+    required: false
+    default: ''
+  tag-filter:
+    description: 'Alias for tag'
+    required: false
+    default: ''
   threshold:
     description: 'Budget alert threshold amount (e.g. 500.00). Alerts in Step Summary and fails step if exceeded.'
     required: false
@@ -203,6 +211,12 @@ runs:
 
         if [ -n "${{ inputs.filter }}" ]; then
           ARGS+=("--filter=${{ inputs.filter }}")
+        fi
+
+        if [ -n "${{ inputs.tag }}" ]; then
+          ARGS+=("--tag=${{ inputs.tag }}")
+        elif [ -n "${{ inputs.tag-filter }}" ]; then
+          ARGS+=("--tag-filter=${{ inputs.tag-filter }}")
         fi
 
         if [ -n "${{ inputs.threshold }}" ]; then

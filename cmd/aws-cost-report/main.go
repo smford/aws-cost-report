@@ -59,6 +59,8 @@ GENERATE FLAGS:
   --end <YYYY-MM-DD>      Explicit billing end date (inclusive)
   --group-by <dim>        Grouping dimension: SERVICE (default), LINKED_ACCOUNT, or TAG:<Key>
   --filter <names>        Filter services by official name, alias, or substring (e.g. 'Amazon DynamoDB', 'S3', 'Lambda')
+  --tag <Key=Value>       Filter costs by AWS Cost Allocation Tag (e.g. 'Environment=Production', 'Project=Billing')
+  --tag-filter <Key=Val>  Alias for --tag. Supports multiple tags or comma-separated values (e.g. 'Env=Prod,Stage')
   --threshold <float>     SRE budget alert threshold dollar amount. Exits with code 1 if exceeded
   --top <int>             Display top N highest cost drivers and aggregate remainder into "Other"
   --min-cost <float>      Minimum cost floor to display in itemized breakdown (default: 0.01)
@@ -82,19 +84,28 @@ EXAMPLES:
   # 4. Filter using common service aliases (e.g. S3, EC2, KMS)
   aws-cost-report generate --filter="S3,EC2"
 
-  # 5. List all official AWS service names available in Cost Explorer
+  # 5. Filter spend scoped to a specific Cost Allocation Tag (e.g. Environment=Production)
+  aws-cost-report generate --tag="Environment=Production"
+
+  # 6. Filter by multiple tag values or multiple tags with Month-over-Month comparison
+  aws-cost-report generate --tag="Environment=Production,Staging" --tag="Project=FinOps" --compare
+
+  # 7. Group tag-filtered costs by linked account or sub-tag
+  aws-cost-report generate --tag="Environment=Production" --group-by=LINKED_ACCOUNT
+
+  # 8. List all official AWS service names available in Cost Explorer
   aws-cost-report services
 
-  # 6. Top 5 cost drivers with remainder aggregated into "Other Services"
+  # 9. Top 5 cost drivers with remainder aggregated into "Other Services"
   aws-cost-report generate --compare --top=5
 
-  # 7. CI/CD budget guardrail in GitHub Actions with Step Summary
+  # 10. CI/CD budget guardrail in GitHub Actions with Step Summary
   aws-cost-report generate --compare --format=markdown --threshold=500.00
 
-  # 8. Offline test mode without AWS credentials
-  aws-cost-report generate --mock --compare
+  # 11. Offline test mode with tag filtering simulation
+  aws-cost-report generate --mock --tag="Environment=Production" --compare
 
-  # 9. Start HTTP microservice daemon
+  # 12. Start HTTP microservice daemon
   aws-cost-report server --port=8080
 
 Use "aws-cost-report <command> --help" for more information about a command.
@@ -440,9 +451,28 @@ func runServer(cfg *config.Config) {
 			}
 		}
 
-		cacheKey := fmt.Sprintf("%v:%s:%s:%d:%s:%v:%d:%.2f",
+		if reqCfg.TagFilters == nil {
+			reqCfg.TagFilters = make(config.TagFilterMap)
+		} else {
+			clonedTags := make(config.TagFilterMap, len(reqCfg.TagFilters))
+			for k, v := range reqCfg.TagFilters {
+				vals := make([]string, len(v))
+				copy(vals, v)
+				clonedTags[k] = vals
+			}
+			reqCfg.TagFilters = clonedTags
+		}
+		for _, tagVal := range q["tag"] {
+			config.ParseTagFilterString(tagVal, reqCfg.TagFilters)
+		}
+		for _, tagVal := range q["tag-filter"] {
+			config.ParseTagFilterString(tagVal, reqCfg.TagFilters)
+		}
+
+		cacheKey := fmt.Sprintf("%v:%s:%s:%d:%s:%v:%s:%d:%.2f",
 			reqCfg.CompareMoM, reqCfg.StartDate, reqCfg.EndDate,
 			reqCfg.MonthsBack, reqCfg.Grouping.Key, reqCfg.Filters,
+			reqCfg.TagFilters.Format(),
 			reqCfg.Defaults.Top, reqCfg.Defaults.MinDisplayCost)
 
 		report, ok := cache.Get(cacheKey)

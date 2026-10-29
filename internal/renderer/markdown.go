@@ -30,6 +30,9 @@ func RenderMarkdown(w io.Writer, r *awsclient.CostReport, writeJobSummary bool, 
 	b.WriteString(fmt.Sprintf("| **Period** | %s to %s (inclusive) |\n", r.Metadata.PeriodStart, r.Metadata.PeriodEnd))
 	b.WriteString(fmt.Sprintf("| **Currency** | %s |\n", r.Metadata.Currency))
 	b.WriteString(fmt.Sprintf("| **Status** | `%s` |\n", r.Metadata.EstimatedOrFinal))
+	if r.Metadata.TagFilter != "" {
+		b.WriteString(fmt.Sprintf("| **Tag Filter** | `%s` |\n", r.Metadata.TagFilter))
+	}
 	b.WriteString(fmt.Sprintf("| **Active Line Items** | %d |\n\n", r.Metadata.ActiveServices))
 
 	// Total Metrics Table

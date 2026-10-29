@@ -50,6 +50,8 @@ jobs:
 | `version` | Target binary release version | `v0.1.0` |
 | `compare` | Enable Month-over-Month comparison | `true` |
 | `format` | Output format (`markdown`, `table`, `json`, `csv`) | `markdown` |
+| `filter` | Filter services by official name, alias, or substring | `""` |
+| `tag` | Filter costs by AWS Cost Allocation Tag (e.g. `Environment=Production`) | `""` |
 | `threshold` | Budget threshold dollar amount | `""` |
 | `fail-on-threshold` | Fail step if budget threshold exceeded | `true` |
 | `top` | Show top N highest cost items and aggregate remainder into Other | `""` |
@@ -92,4 +94,13 @@ aws-cost-report services
 # Filter by official service names, aliases, or substrings
 aws-cost-report generate --filter="Amazon DynamoDB,AWS Lambda"
 aws-cost-report generate --filter="S3,EC2"
+
+# Filter by Cost Allocation Tag (single tag, multi-value, or multiple tags)
+aws-cost-report generate --tag="Environment=Production"
+aws-cost-report generate --tag="Environment=Production,Staging" --compare
+aws-cost-report generate --tag="Environment=Production" --tag="Project=FinOps"
+
+# Combine tag filtering with account or secondary tag grouping
+aws-cost-report generate --tag="Environment=Production" --group-by="LINKED_ACCOUNT"
+aws-cost-report generate --tag="Environment=Production" --group-by="TAG:Owner"
 ```

@@ -32,6 +32,9 @@ func RenderTable(w io.Writer, r *awsclient.CostReport, noColor bool) error {
 	b.WriteString(fmt.Sprintf(" Period:             %s to %s (inclusive)\n", r.Metadata.PeriodStart, r.Metadata.PeriodEnd))
 	b.WriteString(fmt.Sprintf(" Currency:           %s\n", r.Metadata.Currency))
 	b.WriteString(fmt.Sprintf(" Estimated / Final:  %s\n", r.Metadata.EstimatedOrFinal))
+	if r.Metadata.TagFilter != "" {
+		b.WriteString(fmt.Sprintf(" Tag Filter:         %s\n", r.Metadata.TagFilter))
+	}
 	groupLabel := "Services"
 	if r.Metadata.GroupKey != "" && !strings.EqualFold(r.Metadata.GroupKey, "SERVICE") {
 		groupLabel = r.Metadata.GroupKey

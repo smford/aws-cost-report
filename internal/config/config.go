@@ -4,10 +4,127 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
 	"gopkg.in/yaml.v3"
 )
+
+// TagFilterMap maps cost allocation tag keys to one or more allowed tag values.
+type TagFilterMap map[string][]string
+
+// Format returns a human-readable representation of active tag filters.
+func (m TagFilterMap) Format() string {
+	if len(m) == 0 {
+		return ""
+	}
+	var keys []string
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	var parts []string
+	for _, k := range keys {
+		vals := m[k]
+		if len(vals) == 0 {
+			parts = append(parts, k)
+		} else if len(vals) == 1 {
+			parts = append(parts, fmt.Sprintf("%s=%s", k, vals[0]))
+		} else {
+			parts = append(parts, fmt.Sprintf("%s in (%s)", k, strings.Join(vals, ", ")))
+		}
+	}
+	return strings.Join(parts, "; ")
+}
+
+// UnmarshalYAML handles parsing tag filters from YAML mappings, sequences, or scalar strings.
+func (m *TagFilterMap) UnmarshalYAML(node *yaml.Node) error {
+	if *m == nil {
+		*m = make(TagFilterMap)
+	}
+	switch node.Kind {
+	case yaml.MappingNode:
+		for i := 0; i < len(node.Content); i += 2 {
+			key := node.Content[i].Value
+			valNode := node.Content[i+1]
+			switch valNode.Kind {
+			case yaml.ScalarNode:
+				if valNode.Value != "" {
+					(*m)[key] = []string{valNode.Value}
+				}
+			case yaml.SequenceNode:
+				var vals []string
+				for _, item := range valNode.Content {
+					if item.Value != "" {
+						vals = append(vals, item.Value)
+					}
+				}
+				(*m)[key] = vals
+			}
+		}
+	case yaml.SequenceNode:
+		for _, item := range node.Content {
+			ParseTagFilterString(item.Value, *m)
+		}
+	case yaml.ScalarNode:
+		ParseTagFilterString(node.Value, *m)
+	}
+	return nil
+}
+
+// ParseTagFilterString parses tag filter representations such as:
+// "Environment=Production", "Env=Prod,Stage", "Project=FinOps; Team=Core", or "Tier:Backend"
+func ParseTagFilterString(raw string, target TagFilterMap) {
+	if target == nil {
+		return
+	}
+	pairs := strings.Split(raw, ";")
+	for _, pair := range pairs {
+		pair = strings.TrimSpace(pair)
+		if pair == "" {
+			continue
+		}
+		var key, valPart string
+		if idx := strings.Index(pair, "="); idx != -1 {
+			key = strings.TrimSpace(pair[:idx])
+			valPart = strings.TrimSpace(pair[idx+1:])
+		} else if idx := strings.Index(pair, ":"); idx != -1 {
+			key = strings.TrimSpace(pair[:idx])
+			valPart = strings.TrimSpace(pair[idx+1:])
+		} else {
+			key = pair
+			valPart = ""
+		}
+		if key == "" {
+			continue
+		}
+		if valPart == "" {
+			if _, exists := target[key]; !exists {
+				target[key] = []string{}
+			}
+			continue
+		}
+		vals := strings.Split(valPart, ",")
+		for _, v := range vals {
+			trimmed := strings.TrimSpace(v)
+			if trimmed != "" {
+				target[key] = append(target[key], trimmed)
+			}
+		}
+	}
+}
+
+type tagFlagSlice []string
+
+func (t *tagFlagSlice) String() string {
+	return strings.Join(*t, ", ")
+}
+
+func (t *tagFlagSlice) Set(val string) error {
+	*t = append(*t, val)
+	return nil
+}
 
 // Config represents the complete application configuration.
 type Config struct {
@@ -21,20 +138,21 @@ type Config struct {
 	SlackWebhook string            `yaml:"slack_webhook"`
 
 	// Runtime options resolved from CLI flags or env
-	ConfigFile      string   `yaml:"-"`
-	ShowVersion     bool     `yaml:"-"`
-	RunServer       bool     `yaml:"-"`
-	ListServices    bool     `yaml:"-"`
-	MonthsBack      int      `yaml:"-"`
-	StartDate       string   `yaml:"-"`
-	EndDate         string   `yaml:"-"`
-	MetricsList     []string `yaml:"-"`
-	CompareMoM      bool     `yaml:"-"`
-	MockMode        bool     `yaml:"-"`
-	Filters         []string `yaml:"filters"`
-	NoColor         bool     `yaml:"no_color"`
-	OutputFile      string   `yaml:"output_file"`
-	JSONSummaryFile string   `yaml:"json_summary_file"`
+	ConfigFile      string       `yaml:"-"`
+	ShowVersion     bool         `yaml:"-"`
+	RunServer       bool         `yaml:"-"`
+	ListServices    bool         `yaml:"-"`
+	MonthsBack      int          `yaml:"-"`
+	StartDate       string       `yaml:"-"`
+	EndDate         string       `yaml:"-"`
+	MetricsList     []string     `yaml:"-"`
+	CompareMoM      bool         `yaml:"-"`
+	MockMode        bool         `yaml:"-"`
+	Filters         []string     `yaml:"filters"`
+	TagFilters      TagFilterMap `yaml:"tag_filters"`
+	NoColor         bool         `yaml:"no_color"`
+	OutputFile      string       `yaml:"output_file"`
+	JSONSummaryFile string       `yaml:"json_summary_file"`
 }
 
 // DefaultsConfig represents default billing query parameters.
@@ -95,6 +213,7 @@ func DefaultConfig() *Config {
 			Format:          "table",
 			WriteJobSummary: true,
 		},
+		TagFilters: make(TagFilterMap),
 	}
 }
 
@@ -134,6 +253,10 @@ func LoadConfig(args []string) (*Config, error) {
 		servicesFlag = fs.Bool("services", false, "List official AWS Cost Explorer service names")
 		listServFlag = fs.Bool("list-services", false, "Alias for --services")
 	)
+
+	var tagFlags tagFlagSlice
+	fs.Var(&tagFlags, "tag-filter", "Filter costs by AWS Cost Allocation Tag (e.g. 'Environment=Production' or 'Team=Core,API')")
+	fs.Var(&tagFlags, "tag", "Alias for --tag-filter")
 
 	if err := fs.Parse(args); err != nil {
 		return nil, err
@@ -272,6 +395,13 @@ func LoadConfig(args []string) (*Config, error) {
 		if len(cleaned) > 0 {
 			cfg.Filters = cleaned
 		}
+	}
+
+	if cfg.TagFilters == nil {
+		cfg.TagFilters = make(TagFilterMap)
+	}
+	for _, rawTag := range tagFlags {
+		ParseTagFilterString(rawTag, cfg.TagFilters)
 	}
 
 	if *noColorFlag || os.Getenv("NO_COLOR") != "" || os.Getenv("TERM") == "dumb" {

@@ -200,6 +200,29 @@ func TestFilterByOfficialNameAndAlias(t *testing.T) {
 	}
 }
 
+func TestFilterByTag(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.MockMode = true
+	cfg.CompareMoM = true
+	cfg.TagFilters["Environment"] = []string{"Production"}
+
+	refTime := time.Date(2026, time.October, 28, 12, 0, 0, 0, time.UTC)
+	report, err := GenerateMockReport(cfg, refTime)
+	if err != nil {
+		t.Fatalf("GenerateMockReport with tag filter failed: %v", err)
+	}
+
+	if report.Metadata.TagFilter != "Environment=Production" {
+		t.Errorf("expected TagFilter Environment=Production, got %s", report.Metadata.TagFilter)
+	}
+	if report.Totals.UnblendedCost <= 0 {
+		t.Errorf("expected positive total unblended cost, got %f", report.Totals.UnblendedCost)
+	}
+	if len(report.Items) == 0 {
+		t.Errorf("expected filtered items for tag filter")
+	}
+}
+
 func TestListServices(t *testing.T) {
 	client := NewClient(nil, nil)
 	cfg := config.DefaultConfig()

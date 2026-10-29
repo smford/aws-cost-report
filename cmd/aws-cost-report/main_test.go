@@ -166,6 +166,32 @@ func TestRunCLIMockMode(t *testing.T) {
 	}
 }
 
+func TestRunCLIMockModeWithTagFilter(t *testing.T) {
+	tmpDir := t.TempDir()
+	outFile := tmpDir + "/output_tagged.md"
+
+	cfg, err := config.LoadConfig([]string{
+		"--mock",
+		"--format", "markdown",
+		"--tag", "Environment=Production",
+		"--output", outFile,
+	})
+	if err != nil {
+		t.Fatalf("failed to load config: %v", err)
+	}
+
+	runCLI(cfg)
+
+	outData, err := os.ReadFile(outFile)
+	if err != nil {
+		t.Fatalf("failed to read output file: %v", err)
+	}
+	content := string(outData)
+	if !strings.Contains(content, "| **Tag Filter** | `Environment=Production` |") {
+		t.Errorf("expected Tag Filter in markdown output, got:\n%s", content)
+	}
+}
+
 func TestFormatHelp(t *testing.T) {
 	helpText := formatHelp()
 	if !strings.Contains(helpText, "COMMANDS:") {

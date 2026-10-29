@@ -155,6 +155,7 @@ func (c *Client) GenerateReport(ctx context.Context, cfg *config.Config, now tim
 			EstimatedOrFinal: "Finalized",
 			ActiveServices:   len(currentItems),
 			GroupKey:         cfg.Grouping.Key,
+			TagFilter:        cfg.TagFilters.Format(),
 		},
 		Totals:        currentTotals,
 		Items:         currentItems,
@@ -290,12 +291,41 @@ func (c *Client) fetchCostData(ctx context.Context, cfg *config.Config, dateRang
 	itemsMap := make(map[string]*LineItem)
 	var nextPageToken *string
 
+	var filterExpr *cetypes.Expression
+	if len(cfg.TagFilters) > 0 {
+		var tagExprs []cetypes.Expression
+		var sortedKeys []string
+		for k := range cfg.TagFilters {
+			sortedKeys = append(sortedKeys, k)
+		}
+		sort.Strings(sortedKeys)
+
+		for _, k := range sortedKeys {
+			vals := cfg.TagFilters[k]
+			tagExprs = append(tagExprs, cetypes.Expression{
+				Tags: &cetypes.TagValues{
+					Key:    aws.String(k),
+					Values: vals,
+				},
+			})
+		}
+
+		if len(tagExprs) == 1 {
+			filterExpr = &tagExprs[0]
+		} else if len(tagExprs) > 1 {
+			filterExpr = &cetypes.Expression{
+				And: tagExprs,
+			}
+		}
+	}
+
 	for {
 		input := &costexplorer.GetCostAndUsageInput{
 			TimePeriod:    timePeriod,
 			Granularity:   cetypes.GranularityMonthly,
 			Metrics:       cfg.Defaults.Metrics,
 			GroupBy:       groupBy,
+			Filter:        filterExpr,
 			NextPageToken: nextPageToken,
 		}
 
@@ -424,6 +454,7 @@ func GenerateMockReport(cfg *config.Config, now time.Time) (*CostReport, error) 
 			EstimatedOrFinal: "Finalized",
 			ActiveServices:   len(filtered),
 			GroupKey:         cfg.Grouping.Key,
+			TagFilter:        cfg.TagFilters.Format(),
 		},
 		Totals: TotalCosts{
 			BlendedCost:       21.59,
@@ -438,6 +469,57 @@ func GenerateMockReport(cfg *config.Config, now time.Time) (*CostReport, error) 
 		},
 		Items:         filtered,
 		HasComparison: cfg.CompareMoM,
+	}
+
+	if len(cfg.TagFilters) > 0 {
+		var tagFiltered []LineItem
+		filterStr := strings.ToLower(cfg.TagFilters.Format())
+		for _, item := range filtered {
+			if strings.Contains(filterStr, "prod") {
+				if item.Name == "Tax" || item.Name == "Amazon Route 53" || item.Name == "Amazon Simple Notification Service" {
+					continue
+				}
+			} else if strings.Contains(filterStr, "stage") || strings.Contains(filterStr, "dev") {
+				if item.Name != "Amazon CloudWatch" && item.Name != "AWS Lambda" && item.Name != "AWS Step Functions" {
+					continue
+				}
+			}
+			tagFiltered = append(tagFiltered, item)
+		}
+		if len(tagFiltered) > 0 {
+			filtered = tagFiltered
+		}
+
+		var uCost, bCost, aCost, prevUCost float64
+		for _, it := range filtered {
+			uCost += it.UnblendedCost
+			bCost += it.BlendedCost
+			aCost += it.AmortizedCost
+			prevUCost += it.PrevUnblendedCost
+		}
+		uCost = roundToTwo(uCost)
+		bCost = roundToTwo(bCost)
+		aCost = roundToTwo(aCost)
+		prevUCost = roundToTwo(prevUCost)
+		dAmount := roundToTwo(uCost - prevUCost)
+		dPct := 0.0
+		if prevUCost > 0 {
+			dPct = roundToTwo((dAmount / prevUCost) * 100.0)
+		}
+
+		report.Totals = TotalCosts{
+			BlendedCost:       bCost,
+			UnblendedCost:     uCost,
+			AmortizedCost:     aCost,
+			PrevUnblendedCost: prevUCost,
+			PrevBlendedCost:   prevUCost,
+			PrevAmortizedCost: prevUCost,
+			MoMDeltaAmount:    dAmount,
+			MoMDeltaPercent:   dPct,
+			HasPreviousCost:   cfg.CompareMoM,
+		}
+		report.Items = filtered
+		report.Metadata.ActiveServices = len(filtered)
 	}
 
 	if dateRange.IsEstimated {

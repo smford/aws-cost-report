@@ -314,6 +314,20 @@ brew install aws-cost-report</code></pre>
 # Using common aliases:
 aws-cost-report generate --filter="S3,EC2,KMS"</code></pre>
 
+      <h3>Filtering by Cost Allocation Tags</h3>
+      <p>Scope your entire report to tagged workloads with native AWS Cost Explorer server-side filtering:</p>
+      <pre><code># Filter by single tag
+aws-cost-report generate --tag="Environment=Production"
+
+# Multi-value filter (logical OR) with MoM delta comparison
+aws-cost-report generate --tag="Environment=Production,Staging" --compare
+
+# Compound tag filtering (logical AND)
+aws-cost-report generate --tag="Environment=Production" --tag="Project=FinOps"
+
+# Combine tag filtering with Linked Account breakdown
+aws-cost-report generate --tag="Environment=Production" --group-by="LINKED_ACCOUNT"</code></pre>
+
       <h3>Budget Guardrail</h3>
       <pre><code>aws-cost-report generate --threshold=50.00
 # Returns exit code 1 if total cost exceeds $50.00</code></pre>

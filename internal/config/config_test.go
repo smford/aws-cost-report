@@ -125,4 +125,55 @@ reporting:
 	if cfgExtra.SlackWebhook != "https://hooks.slack.com/services/test" {
 		t.Errorf("expected SlackWebhook, got %s", cfgExtra.SlackWebhook)
 	}
+
+	// Test 4: Test tag-filter and tag flags
+	tagArgs := []string{
+		"--tag", "Environment=Production,Staging",
+		"--tag", "Project=FinOps",
+		"--tag-filter", "Team=Core; Tier=Backend",
+	}
+	cfgTags, err := LoadConfig(tagArgs)
+	if err != nil {
+		t.Fatalf("LoadConfig with tag flags failed: %v", err)
+	}
+	if len(cfgTags.TagFilters["Environment"]) != 2 {
+		t.Errorf("expected 2 values for Environment, got %v", cfgTags.TagFilters["Environment"])
+	}
+	if len(cfgTags.TagFilters["Project"]) != 1 || cfgTags.TagFilters["Project"][0] != "FinOps" {
+		t.Errorf("expected Project=FinOps, got %v", cfgTags.TagFilters["Project"])
+	}
+	if len(cfgTags.TagFilters["Team"]) != 1 || cfgTags.TagFilters["Team"][0] != "Core" {
+		t.Errorf("expected Team=Core, got %v", cfgTags.TagFilters["Team"])
+	}
+	formattedTags := cfgTags.TagFilters.Format()
+	if formattedTags != "Environment in (Production, Staging); Project=FinOps; Team=Core; Tier=Backend" {
+		t.Errorf("unexpected formatted tags: %s", formattedTags)
+	}
+}
+
+func TestTagFilterYAML(t *testing.T) {
+	yamlData := `
+version: "1"
+tag_filters:
+  Environment:
+    - "Production"
+    - "Staging"
+  Owner: "FinOps"
+`
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "tags.yaml")
+	if err := os.WriteFile(configPath, []byte(yamlData), 0644); err != nil {
+		t.Fatalf("failed to write test config file: %v", err)
+	}
+
+	cfg, err := LoadConfig([]string{"--config", configPath})
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+	if len(cfg.TagFilters["Environment"]) != 2 {
+		t.Errorf("expected 2 Environment tag values, got %v", cfg.TagFilters["Environment"])
+	}
+	if len(cfg.TagFilters["Owner"]) != 1 || cfg.TagFilters["Owner"][0] != "FinOps" {
+		t.Errorf("expected Owner=FinOps, got %v", cfg.TagFilters["Owner"])
+	}
 }

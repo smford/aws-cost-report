@@ -166,7 +166,37 @@ aws-cost-report generate --filter="S3,EC2,KMS"
 aws-cost-report generate --filter="DynamoDB,Lambda"
 ```
 
-### 5. Group by Tag or Linked Account
+### 5. Filtering by Cost Allocation Tags (`--tag` / `--tag-filter`)
+Scope your entire billing report to specific workloads tagged in AWS. AWS Cost Explorer natively filters both totals and breakdown items to resources bearing the specified tags:
+
+```bash
+# Example A: Filter by single tag
+aws-cost-report generate --tag="Environment=Production"
+
+# Example B: Filter by tag with multiple allowed values (logical OR)
+aws-cost-report generate --tag="Environment=Production,Staging"
+
+# Example C: Filter by multiple different tags (logical AND) with Month-over-Month comparison
+aws-cost-report generate --tag="Environment=Production" --tag="Project=FinOps" --compare
+
+# Example D: Group tag-filtered costs by linked account
+aws-cost-report generate --tag="Environment=Production" --group-by="LINKED_ACCOUNT"
+
+# Example E: Group tag-filtered costs by a secondary tag dimension
+aws-cost-report generate --tag="Environment=Production" --group-by="TAG:Owner"
+```
+
+In `config.yaml`, tags can also be permanently configured:
+
+```yaml
+tag_filters:
+  Environment:
+    - "Production"
+    - "Staging"
+  Project: "FinOps"
+```
+
+### 6. Group by Tag or Linked Account
 Break down costs by environment, team, or AWS Organization linked account:
 
 ```bash
@@ -177,21 +207,21 @@ aws-cost-report generate --group-by="TAG:Environment"
 aws-cost-report generate --group-by="LINKED_ACCOUNT"
 ```
 
-### 6. Top N Cost Drivers
+### 7. Top N Cost Drivers
 Highlight the largest cost drivers and consolidate all smaller workloads into `"Other Services"`:
 
 ```bash
 aws-cost-report generate --compare --top=5
 ```
 
-### 7. Explicit Date Range
+### 8. Explicit Date Range
 Query custom date intervals (for custom ranges, comparison periods match the exact duration in days):
 
 ```bash
 aws-cost-report generate --start=2026-08-01 --end=2026-09-30
 ```
 
-### 8. SRE Budget Guardrail (CI/CD Quality Gate)
+### 9. SRE Budget Guardrail (CI/CD Quality Gate)
 Exit with status code `1` if total unblended cost exceeds threshold:
 
 ```bash
@@ -199,7 +229,7 @@ aws-cost-report generate --threshold=50.00
 echo $? # Returns 1 if total cost > $50.00, or 0 if within budget
 ```
 
-### 9. Export to JSON or CSV
+### 10. Export to JSON or CSV
 
 ```bash
 # JSON output for jq or downstream processing
@@ -259,6 +289,8 @@ jobs:
 | `end` | Explicit billing end date (`YYYY-MM-01` or `YYYY-MM-DD`) | `""` | No |
 | `group-by` | Grouping dimension (`SERVICE`, `LINKED_ACCOUNT`, or `TAG:<Key>`) | `SERVICE` | No |
 | `filter` | Comma-separated substring filter for services (e.g. `DynamoDB,Lambda`) | `""` | No |
+| `tag` | Filter costs by AWS Cost Allocation Tag (e.g. `Environment=Production` or `Environment=Prod,Stage`) | `""` | No |
+| `tag-filter` | Alias for `tag` | `""` | No |
 | `threshold` | SRE budget alert dollar threshold (e.g. `500.00`). Exceeding fails the step. | `""` | No |
 | `fail-on-threshold` | Whether to terminate step with failure on threshold breach (`true`/`false`) | `true` | No |
 | `min-cost` | Minimum cost floor to display in itemized breakdown | `""` | No |
@@ -452,6 +484,7 @@ To run `aws-cost-report`, the executing IAM principal requires read permissions 
 | `--compare` | | `false` | Enable Month-over-Month (MoM) comparison against preceding billing period |
 | `--format` | | `table` | Output format: `table`, `markdown`, `json`, `csv` |
 | `--filter` | `--service` | | Filter services by official name (`Amazon DynamoDB`), alias (`S3`, `EC2`), or substring |
+| `--tag` | `--tag-filter` | | Filter costs by AWS Cost Allocation Tag (e.g. `Environment=Production` or `Team=Core,API`) |
 | `--top` | | `0` | Show top N highest cost items and aggregate remainder into "Other Services" |
 | `--months` | | `1` | Number of previous complete months to analyze |
 | `--start` | | | Explicit billing start date (`YYYY-MM-01` or `YYYY-MM-DD`, inclusive) |
