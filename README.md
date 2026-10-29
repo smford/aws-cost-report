@@ -425,6 +425,7 @@ jobs:
 | `min-cost` | Minimum cost floor to display in itemized breakdown | `""` | No |
 | `top` | Limit breakdown to top N cost drivers and aggregate remainder into "Other" | `""` | No |
 | `slack-webhook` | Incoming Slack webhook URL for automated ChatOps notifications | `""` | No |
+| `teams-webhook` | Incoming Microsoft Teams webhook URL for automated ChatOps notifications | `""` | No |
 | `write-summary` | Automatically publish markdown table to `$GITHUB_STEP_SUMMARY` | `true` | No |
 | `mock` | Run with offline deterministic mock data (no AWS API calls) | `false` | No |
 | `config` | Path to custom YAML configuration file | `""` | No |
@@ -543,8 +544,9 @@ accounts:
   "123456789012": "Production Core"
   "987654321098": "Staging / QA"
 
-# Optional incoming Slack webhook for automated ChatOps notifications
+# Optional incoming ChatOps webhooks for automated notifications
 slack_webhook: ""
+teams_webhook: ""
 ```
 
 *Note: Command-line flags always take precedence over values in `config.yaml`.*
@@ -640,6 +642,7 @@ To run `aws-cost-report`, the executing IAM principal requires read permissions 
 | `--output` | `-o` | | Write formatted cost report to specified file path |
 | `--json-summary` | | | Write machine-readable JSON metrics summary to file path |
 | `--slack-webhook` | | | Incoming Slack webhook URL to post formatted Block Kit report |
+| `--teams-webhook` | | | Incoming Microsoft Teams webhook URL to post formatted MessageCard report |
 | `--no-color` | | `false` | Disable ANSI color codes in table deltas (also honors `NO_COLOR=1`) |
 | `--mock` | | `false` | Run in offline mode with simulated AWS billing data |
 | `--config` | `-c` | `config.yaml` | Path to YAML configuration file |

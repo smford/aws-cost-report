@@ -138,6 +138,7 @@ type Config struct {
 	AccountName      string            `yaml:"name"`
 	AccountNameAlias string            `yaml:"account_name"`
 	SlackWebhook     string            `yaml:"slack_webhook"`
+	TeamsWebhook     string            `yaml:"teams_webhook"`
 	Monthly          bool              `yaml:"monthly"`
 	MTD              bool              `yaml:"mtd"`
 
@@ -257,6 +258,7 @@ func LoadConfig(args []string) (*Config, error) {
 		jsonSumFlag  = fs.String("json-summary", "", "Optional file path to write machine-readable summary JSON")
 		topFlag      = fs.Int("top", 0, "Show top N highest cost items and aggregate remainder into Other")
 		slackFlag    = fs.String("slack-webhook", "", "Incoming Slack webhook URL to post formatted cost report")
+		teamsFlag    = fs.String("teams-webhook", "", "Incoming Microsoft Teams webhook URL to post formatted cost report")
 		currencyFlag = fs.String("currency", "", "Currency code (e.g. USD, EUR, GBP) to override auto-detected AWS billing currency")
 		nameFlag     = fs.String("name", "", "Human-readable name or alias for the AWS account (e.g. 'Production Core')")
 		nameAlias    = fs.String("account-name", "", "Alias for --name")
@@ -381,6 +383,10 @@ func LoadConfig(args []string) (*Config, error) {
 
 	if *slackFlag != "" {
 		cfg.SlackWebhook = *slackFlag
+	}
+
+	if *teamsFlag != "" {
+		cfg.TeamsWebhook = *teamsFlag
 	}
 
 	if *compareMoM {

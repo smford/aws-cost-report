@@ -58,6 +58,7 @@ jobs:
 | `fail-on-threshold` | Fail step if budget threshold exceeded | `true` |
 | `top` | Show top N highest cost items and aggregate remainder into Other | `""` |
 | `slack-webhook` | Incoming Slack webhook URL for automated ChatOps | `""` |
+| `teams-webhook` | Incoming Microsoft Teams webhook URL for automated ChatOps | `""` |
 | `write-summary` | Write report to `$GITHUB_STEP_SUMMARY` | `true` |
 | `monthly` | Render multi-month historical breakdown in column format | `false` |
 | `mock` | Run offline with synthetic dataset | `false` |

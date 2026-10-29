@@ -333,3 +333,32 @@ defaults:
 		t.Errorf("expected MTD true from YAML, got false")
 	}
 }
+
+func TestTeamsWebhookConfig(t *testing.T) {
+	// Flag
+	cfg, err := LoadConfig([]string{"--teams-webhook", "https://outlook.office.com/webhook/test"})
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+	if cfg.TeamsWebhook != "https://outlook.office.com/webhook/test" {
+		t.Errorf("expected TeamsWebhook to be set from flag, got %s", cfg.TeamsWebhook)
+	}
+
+	// YAML
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "teams-config.yaml")
+	yamlContent := `
+version: "1"
+teams_webhook: "https://outlook.office.com/webhook/yaml"
+`
+	if err := os.WriteFile(configPath, []byte(yamlContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+	cfg2, err := LoadConfig([]string{"--config", configPath})
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+	if cfg2.TeamsWebhook != "https://outlook.office.com/webhook/yaml" {
+		t.Errorf("expected TeamsWebhook to be set from YAML, got %s", cfg2.TeamsWebhook)
+	}
+}

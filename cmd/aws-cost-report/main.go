@@ -73,6 +73,7 @@ GENERATE FLAGS:
   --output, -o <path>     Write formatted report output to specified file
   --json-summary <path>   Write machine-readable summary metrics to JSON file
   --slack-webhook <url>   Post formatted Block Kit report to incoming Slack webhook
+  --teams-webhook <url>   Post formatted MessageCard report to incoming Microsoft Teams webhook
   --currency <code>       Override currency code and symbol (e.g. USD, EUR, GBP). Auto-detected by default
   --no-color              Disable ANSI colors in terminal tables (honors NO_COLOR=1)
   --mock                  Run in offline mode with simulated AWS billing data
@@ -321,6 +322,13 @@ func runCLI(cfg *config.Config) {
 	if cfg.SlackWebhook != "" {
 		if err := webhook.SendSlackNotification(ctx, cfg.SlackWebhook, report, cfg.Budget.FailOnThreshold); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: failed to dispatch Slack notification: %v\n", err)
+		}
+	}
+
+	// Dispatch Microsoft Teams notification if configured
+	if cfg.TeamsWebhook != "" {
+		if err := webhook.SendTeamsNotification(ctx, cfg.TeamsWebhook, report, cfg.Budget.FailOnThreshold); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to dispatch Microsoft Teams notification: %v\n", err)
 		}
 	}
 
