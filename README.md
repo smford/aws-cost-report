@@ -106,7 +106,7 @@ Download pre-compiled static binaries from the [GitHub Releases](https://github.
 ```bash
 docker pull ghcr.io/smford/aws-cost-report:latest
 # or explicit version
-docker pull ghcr.io/smford/aws-cost-report:v0.6.0
+docker pull ghcr.io/smford/aws-cost-report:v0.7.0
 
 docker run --rm \
   -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_REGION=us-east-1 \
@@ -339,7 +339,7 @@ jobs:
           aws-region: us-east-1
 
       - name: Generate Cost Report
-        uses: smford/aws-cost-report@latest # or @v0.6.0
+        uses: smford/aws-cost-report@latest # or @v0.7.0
         with:
           compare: 'true'
           threshold: '500.00'
@@ -350,7 +350,7 @@ jobs:
 
 | Input | Description | Default | Required |
 |:---|:---|:---|:---:|
-| `version` | Version of `aws-cost-report` binary to run (e.g. `v0.6.0` or `latest`) | `latest` | No |
+| `version` | Version of `aws-cost-report` binary to run (e.g. `v0.7.0` or `latest`) | `latest` | No |
 | `compare` | Enable Month-over-Month comparison against preceding period (`true`/`false`) | `true` | No |
 | `format` | Report output format (`markdown`, `table`, `json`, `csv`) | `markdown` | No |
 | `months` | Number of historical months back to query | `1` | No |
@@ -390,7 +390,7 @@ jobs:
 ```yaml
       - name: Run AWS Cost Report
         id: cost
-        uses: smford/aws-cost-report@latest # or @v0.6.0
+        uses: smford/aws-cost-report@latest # or @v0.7.0
         with:
           compare: 'true'
           threshold: '1000.00'
@@ -437,7 +437,7 @@ jobs:
 
       - name: Install aws-cost-report
         run: |
-          curl -sSL https://github.com/smford/aws-cost-report/releases/download/v0.6.0/aws-cost-report_0.6.0_linux_amd64.tar.gz | tar -xz
+          curl -sSL https://github.com/smford/aws-cost-report/releases/download/v0.7.0/aws-cost-report_0.7.0_linux_amd64.tar.gz | tar -xz
           sudo mv aws-cost-report /usr/local/bin/
 
       - name: Run Cost Audit with Budget Guardrail

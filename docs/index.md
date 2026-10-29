@@ -36,7 +36,7 @@ jobs:
           aws-region: us-east-1
 
       - name: Generate Cost Report
-        uses: smford/aws-cost-report@latest # or @v0.6.0
+        uses: smford/aws-cost-report@latest # or @v0.7.0
         with:
           compare: 'true'
           threshold: '500.00'
@@ -47,7 +47,7 @@ jobs:
 
 | Input | Description | Default |
 |:---|:---|:---:|
-| `version` | Target binary release version (e.g. `v0.6.0` or `latest`) | `latest` |
+| `version` | Target binary release version (e.g. `v0.7.0` or `latest`) | `latest` |
 | `compare` | Enable Month-over-Month comparison | `true` |
 | `format` | Output format (`markdown`, `table`, `json`, `csv`) | `markdown` |
 | `filter` | Filter services by official name, alias, or substring | `""` |

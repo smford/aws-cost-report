@@ -7,7 +7,7 @@ branding:
 
 inputs:
   version:
-    description: 'Version of aws-cost-report binary to execute (e.g. v0.6.0, latest, or local)'
+    description: 'Version of aws-cost-report binary to execute (e.g. v0.7.0, latest, or local)'
     required: false
     default: 'latest'
   compare:
@@ -164,11 +164,20 @@ runs:
         mkdir -p "$BIN_DIR"
 
         VERSION="${{ inputs.version }}"
+        ACTION_REF="${{ github.action_ref }}"
+
         if [ -z "$VERSION" ] || [ "$VERSION" = "latest" ]; then
-          LATEST_URL=$(curl -sI https://github.com/smford/aws-cost-report/releases/latest | grep -i "^location:" | tr -d '\r\n')
-          VERSION="${LATEST_URL##*/}"
-          if [ -z "$VERSION" ] || [ "$VERSION" = "latest" ]; then
-            VERSION="v0.6.0"
+          if [[ "$ACTION_REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+            VERSION="$ACTION_REF"
+          fi
+        fi
+
+        if [ -z "$VERSION" ] || [ "$VERSION" = "latest" ]; then
+          RESOLVED_TAG=$(curl -sI https://github.com/smford/aws-cost-report/releases/latest 2>/dev/null | grep -i "^location:" | head -n1 | sed -E 's/.*\/tag\///' | tr -d '\r\n ')
+          if [ -n "$RESOLVED_TAG" ] && [[ "$RESOLVED_TAG" =~ ^v[0-9]+ ]]; then
+            VERSION="$RESOLVED_TAG"
+          else
+            VERSION="v0.7.0"
           fi
         fi
         VER_NUM="${VERSION#v}"
