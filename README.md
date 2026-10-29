@@ -380,6 +380,22 @@ source <(aws-cost-report completion zsh)
 aws-cost-report completion fish | source
 ```
 
+### 17. Save Reports Directly to Amazon S3
+Export reports and JSON summaries straight to Amazon S3 buckets using `s3://` URIs or the dedicated `--s3-bucket` and `--s3-key` flags:
+
+```bash
+# Export markdown report directly to an S3 URI:
+aws-cost-report generate --compare --output="s3://my-billing-reports/2026-10-report.md"
+
+# Export both formatted report and machine-readable JSON summary to S3:
+aws-cost-report generate --compare \
+  --output="s3://my-billing-reports/cost-report.md" \
+  --json-summary="s3://my-billing-reports/cost-summary.json"
+
+# Alternatively, specify target bucket with local output path:
+aws-cost-report generate --output="report.csv" --format=csv --s3-bucket="my-billing-reports" --s3-key="csv/2026-10.csv"
+```
+
 ---
 
 ## GitHub Action
@@ -446,7 +462,9 @@ jobs:
 | `currency` | Override currency code and symbol (e.g. `USD`, `EUR`, `GBP`). Auto-detected from AWS by default. | `""` | No |
 | `monthly` | Render multi-month historical breakdown in column format (`true`/`false`) | `false` | No |
 | `mtd` | Query Month-to-Date spend from 1st of month up to today (`true`/`false`) | `false` | No |
-| `output-file` | Optional path to save the formatted report to disk | `""` | No |
+| `output-file` | Optional path to save the formatted report to disk or `s3://` URI | `""` | No |
+| `s3-bucket` | Target S3 bucket name for saving report output | `""` | No |
+| `s3-key` | Optional S3 object key prefix/path (default: based on output file name) | `""` | No |
 
 ### Action Outputs
 
@@ -654,8 +672,10 @@ To run `aws-cost-report`, the executing IAM principal requires read permissions 
 | `--name` | `--account-name` | | Human-readable name or alias for the AWS account (e.g. `Production Core`) |
 | `--threshold` | | `0.00` | SRE budget alert dollar threshold. Exits with code 1 if exceeded |
 | `--min-cost` | | `0.01` | Minimum cost threshold to display line items |
-| `--output` | `-o` | | Write formatted cost report to specified file path |
-| `--json-summary` | | | Write machine-readable JSON metrics summary to file path |
+| `--output` | `-o` | | Write formatted cost report to specified local file path or `s3://bucket/key` URI |
+| `--json-summary` | | | Write machine-readable JSON metrics summary to file path or `s3://bucket/key` URI |
+| `--s3-bucket` | | | Target AWS S3 bucket name for saving report output |
+| `--s3-key` | | | Optional S3 object key prefix/path for output upload |
 | `--slack-webhook` | | | Incoming Slack webhook URL to post formatted Block Kit report |
 | `--teams-webhook` | | | Incoming Microsoft Teams webhook URL to post formatted MessageCard report |
 | `--no-color` | | `false` | Disable ANSI color codes in table deltas (also honors `NO_COLOR=1`) |

@@ -35,7 +35,7 @@ _aws_cost_report() {
     _init_completion || return
 
     local commands="generate services server completion version help"
-    local flags="--compare --mtd --current-month --monthly --trend --format --months --start --end --group-by --name --account-name --filter --service --tag --tag-filter --threshold --fail-on-threshold --top --min-cost --slack-webhook --teams-webhook --currency --no-color --mock --config -c --output -o --json-summary --write-summary --version -v --help -h"
+    local flags="--compare --mtd --current-month --monthly --trend --format --months --start --end --group-by --name --account-name --filter --service --tag --tag-filter --threshold --fail-on-threshold --top --min-cost --slack-webhook --teams-webhook --s3-bucket --s3-key --currency --no-color --mock --config -c --output -o --json-summary --write-summary --version -v --help -h"
 
     case "${prev}" in
         --format)
@@ -130,6 +130,8 @@ _aws_cost_report() {
                         '--json-summary[Write machine-readable summary metrics to JSON file]:file:_files' \
                         '--slack-webhook[Incoming Slack webhook URL]:url:' \
                         '--teams-webhook[Incoming Microsoft Teams webhook URL]:url:' \
+                        '--s3-bucket[S3 bucket name to upload cost report]:bucket:' \
+                        '--s3-key[S3 object key for uploaded report]:key:' \
                         '--currency[Override currency code and symbol]:currency:(USD EUR GBP JPY AUD CAD CHF)' \
                         '--no-color[Disable ANSI colors in terminal tables]' \
                         '--mock[Run in offline mode with simulated AWS billing data]' \
@@ -178,6 +180,8 @@ complete -c aws-cost-report -l no-color -d "Disable ANSI color output in termina
 complete -c aws-cost-report -l config -s c -r -d "Path to YAML configuration file"
 complete -c aws-cost-report -l output -s o -r -d "Write report output to specified file"
 complete -c aws-cost-report -l json-summary -r -d "Write summary JSON to file"
+complete -c aws-cost-report -l s3-bucket -d "S3 bucket to upload cost report"
+complete -c aws-cost-report -l s3-key -d "S3 object key for uploaded report"
 complete -c aws-cost-report -l version -s v -d "Print version information and exit"
 complete -c aws-cost-report -l help -s h -d "Display help information"
 `

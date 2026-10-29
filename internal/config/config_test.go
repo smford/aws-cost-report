@@ -362,3 +362,42 @@ teams_webhook: "https://outlook.office.com/webhook/yaml"
 		t.Errorf("expected TeamsWebhook to be set from YAML, got %s", cfg2.TeamsWebhook)
 	}
 }
+
+func TestS3ConfigAndFlags(t *testing.T) {
+	// Flags
+	cfg, err := LoadConfig([]string{
+		"--s3-bucket", "my-reports-bucket",
+		"--s3-key", "finops/monthly.json",
+	})
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+	if cfg.S3Bucket != "my-reports-bucket" {
+		t.Errorf("expected S3Bucket 'my-reports-bucket', got %s", cfg.S3Bucket)
+	}
+	if cfg.S3Key != "finops/monthly.json" {
+		t.Errorf("expected S3Key 'finops/monthly.json', got %s", cfg.S3Key)
+	}
+
+	// YAML
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "s3-config.yaml")
+	yamlContent := `
+version: "1"
+s3_bucket: "yaml-bucket"
+s3_key: "reports/yaml.md"
+`
+	if err := os.WriteFile(configPath, []byte(yamlContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+	cfg2, err := LoadConfig([]string{"--config", configPath})
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+	if cfg2.S3Bucket != "yaml-bucket" {
+		t.Errorf("expected S3Bucket 'yaml-bucket', got %s", cfg2.S3Bucket)
+	}
+	if cfg2.S3Key != "reports/yaml.md" {
+		t.Errorf("expected S3Key 'reports/yaml.md', got %s", cfg2.S3Key)
+	}
+}

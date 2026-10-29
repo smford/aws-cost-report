@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -335,4 +336,47 @@ func TestShellCompletionGenerators(t *testing.T) {
 	if !strings.Contains(fishScript, "complete -c aws-cost-report") {
 		t.Errorf("expected valid fish completion script, got:\n%s", fishScript)
 	}
+}
+
+func TestSaveOutputFileS3Mock(t *testing.T) {
+	ctx := context.Background()
+	// Mock mode with s3:// URI
+	err := saveOutputFile(ctx, nil, "s3://mock-bucket/reports/test.md", []byte("# Report"), true)
+	if err != nil {
+		t.Fatalf("expected saveOutputFile with mock s3:// to succeed, got %v", err)
+	}
+
+	// Invalid s3 URI
+	err = saveOutputFile(ctx, nil, "s3://invalid", []byte("# Report"), true)
+	if err == nil {
+		t.Errorf("expected error for invalid s3 URI without key")
+	}
+
+	// Local file fallback
+	tmpDir := t.TempDir()
+	localFile := tmpDir + "/test-output.txt"
+	err = saveOutputFile(ctx, nil, localFile, []byte("hello local"), false)
+	if err != nil {
+		t.Fatalf("saveOutputFile local failed: %v", err)
+	}
+	content, _ := os.ReadFile(localFile)
+	if string(content) != "hello local" {
+		t.Errorf("expected 'hello local', got %s", string(content))
+	}
+}
+
+func TestRunCLIMockModeS3Upload(t *testing.T) {
+	cfg, err := config.LoadConfig([]string{
+		"--mock",
+		"--format", "markdown",
+		"--output", "s3://my-billing-bucket/reports/oct-2026.md",
+		"--s3-bucket", "my-billing-bucket",
+		"--s3-key", "backup/oct-2026.md",
+	})
+	if err != nil {
+		t.Fatalf("failed to load config: %v", err)
+	}
+
+	// Should run cleanly in mock mode without panicking
+	runCLI(cfg)
 }

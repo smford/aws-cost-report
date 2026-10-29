@@ -17,6 +17,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/costexplorer"
 	cetypes "github.com/aws/aws-sdk-go-v2/service/costexplorer/types"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/aws/smithy-go"
 
@@ -39,11 +40,12 @@ type IAMAPI interface {
 	ListAccountAliases(ctx context.Context, params *iam.ListAccountAliasesInput, optFns ...func(*iam.Options)) (*iam.ListAccountAliasesOutput, error)
 }
 
-// Client orchestrates AWS API queries across STS, IAM, and Cost Explorer.
+// Client orchestrates AWS API queries across STS, IAM, Cost Explorer, and S3.
 type Client struct {
 	ceClient  CostExplorerAPI
 	stsClient STSAPI
 	iamClient IAMAPI
+	s3Client  S3API
 }
 
 // NewClient creates a new AWS client instance.
@@ -69,8 +71,11 @@ func NewRealClient(ctx context.Context) (*Client, error) {
 	stsClient := sts.NewFromConfig(cfg)
 	ceClient := costexplorer.NewFromConfig(cfg)
 	iamClient := iam.NewFromConfig(cfg)
+	s3Client := s3.NewFromConfig(cfg)
 
-	return NewClient(ceClient, stsClient, iamClient), nil
+	client := NewClient(ceClient, stsClient, iamClient)
+	client.s3Client = s3Client
+	return client, nil
 }
 
 // HasSTS returns true if an STS client is configured.

@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -71,8 +72,10 @@ GENERATE FLAGS:
   --threshold <float>     SRE budget alert threshold dollar amount. Exits with code 1 if exceeded
   --top <int>             Display top N highest cost drivers and aggregate remainder into "Other"
   --min-cost <float>      Minimum cost floor to display in itemized breakdown (default: 0.01)
-  --output, -o <path>     Write formatted report output to specified file
-  --json-summary <path>   Write machine-readable summary metrics to JSON file
+  --output, -o <path|s3>  Write formatted report output to local file path or S3 URI (s3://bucket/key)
+  --s3-bucket <name>      S3 bucket to automatically upload report
+  --s3-key <key>          S3 object key (e.g. 'reports/cost-report.md')
+  --json-summary <path>   Write machine-readable summary metrics to JSON file (supports local path or s3://)
   --slack-webhook <url>   Post formatted Block Kit report to incoming Slack webhook
   --teams-webhook <url>   Post formatted MessageCard report to incoming Microsoft Teams webhook
   --currency <code>       Override currency code and symbol (e.g. USD, EUR, GBP). Auto-detected by default
@@ -295,8 +298,30 @@ func runCLI(cfg *config.Config) {
 	}
 
 	if cfg.OutputFile != "" {
-		if err := os.WriteFile(cfg.OutputFile, buf.Bytes(), 0644); err != nil {
+		if err := saveOutputFile(ctx, client, cfg.OutputFile, buf.Bytes(), cfg.MockMode); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: failed to write output file %s: %v\n", cfg.OutputFile, err)
+		}
+	}
+
+	if cfg.S3Bucket != "" && !strings.HasPrefix(cfg.OutputFile, "s3://") {
+		s3Key := cfg.S3Key
+		if s3Key == "" {
+			ext := ".txt"
+			switch cfg.Reporting.Format {
+			case "markdown", "md":
+				ext = ".md"
+			case "json":
+				ext = ".json"
+			case "csv":
+				ext = ".csv"
+			case "prometheus", "prom":
+				ext = ".prom"
+			}
+			s3Key = fmt.Sprintf("cost-reports/aws-cost-report-%s%s", report.Metadata.PeriodStart, ext)
+		}
+		s3URI := fmt.Sprintf("s3://%s/%s", cfg.S3Bucket, s3Key)
+		if err := saveOutputFile(ctx, client, s3URI, buf.Bytes(), cfg.MockMode); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to upload report to %s: %v\n", s3URI, err)
 		}
 	}
 
@@ -322,7 +347,9 @@ func runCLI(cfg *config.Config) {
 		}
 
 		if data, err := json.MarshalIndent(summary, "", "  "); err == nil {
-			_ = os.WriteFile(cfg.JSONSummaryFile, append(data, '\n'), 0644)
+			if err := saveOutputFile(ctx, client, cfg.JSONSummaryFile, append(data, '\n'), cfg.MockMode); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to write JSON summary file %s: %v\n", cfg.JSONSummaryFile, err)
+			}
 		}
 	}
 
@@ -347,6 +374,33 @@ func runCLI(cfg *config.Config) {
 			sym, report.Totals.UnblendedCost, report.Metadata.Currency, sym, cfg.Budget.FailOnThreshold, report.Metadata.Currency)
 		os.Exit(1)
 	}
+}
+
+func saveOutputFile(ctx context.Context, client *awsclient.Client, pathOrURI string, data []byte, mock bool) error {
+	if strings.HasPrefix(pathOrURI, "s3://") {
+		bucket, key, err := awsclient.ParseS3URI(pathOrURI)
+		if err != nil {
+			return err
+		}
+		if mock {
+			fmt.Printf("[MOCK] Uploaded %d bytes to s3://%s/%s\n", len(data), bucket, key)
+			return nil
+		}
+		if client == nil {
+			var err error
+			client, err = awsclient.NewRealClient(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to initialize AWS client for S3 upload: %w", err)
+			}
+		}
+		return client.UploadToS3(ctx, bucket, key, data)
+	}
+
+	dir := filepath.Dir(pathOrURI)
+	if dir != "" && dir != "." {
+		_ = os.MkdirAll(dir, 0755)
+	}
+	return os.WriteFile(pathOrURI, data, 0644)
 }
 
 type reportCache struct {

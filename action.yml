@@ -90,6 +90,14 @@ inputs:
     description: 'Path to custom YAML configuration file'
     required: false
     default: ''
+  s3-bucket:
+    description: 'Optional S3 bucket name to automatically upload cost report'
+    required: false
+    default: ''
+  s3-key:
+    description: 'Optional S3 object key when using s3-bucket (e.g. reports/cost-report.md)'
+    required: false
+    default: ''
   output-file:
     description: 'Optional file path to save report output'
     required: false
@@ -274,6 +282,14 @@ runs:
 
         if [ -n "${{ inputs.teams-webhook }}" ]; then
           ARGS+=("--teams-webhook=${{ inputs.teams-webhook }}")
+        fi
+
+        if [ -n "${{ inputs.s3-bucket }}" ]; then
+          ARGS+=("--s3-bucket=${{ inputs.s3-bucket }}")
+        fi
+
+        if [ -n "${{ inputs.s3-key }}" ]; then
+          ARGS+=("--s3-key=${{ inputs.s3-key }}")
         fi
 
         if [ "${{ inputs.write-summary }}" = "true" ]; then

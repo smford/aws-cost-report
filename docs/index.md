@@ -62,7 +62,9 @@ jobs:
 | `write-summary` | Write report to `$GITHUB_STEP_SUMMARY` | `true` |
 | `monthly` | Render multi-month historical breakdown in column format | `false` |
 | `mock` | Run offline with synthetic dataset | `false` |
-| `output-file` | Optional path to save output file | `""` |
+| `output-file` | Optional path to save output file or `s3://` URI | `""` |
+| `s3-bucket` | Target AWS S3 bucket name for saving report output | `""` |
+| `s3-key` | Optional S3 object key prefix/path | `""` |
 
 Outputs include `report`, `total-cost`, `previous-cost`, `cost-delta`, `cost-delta-pct`, and `threshold-breached`.
 
@@ -216,4 +218,23 @@ source <(aws-cost-report completion zsh)
 
 # Fish:
 aws-cost-report completion fish | source
+```
+
+---
+
+## Exporting Reports to Amazon S3
+
+Save cost reports or machine-readable JSON summaries directly to an S3 bucket:
+
+```bash
+# Upload report markdown directly to S3
+aws-cost-report generate --compare --output="s3://my-billing-bucket/reports/2026-10.md"
+
+# Upload both formatted report and JSON summary to S3
+aws-cost-report generate --compare \
+  --output="s3://my-billing-bucket/cost-report.md" \
+  --json-summary="s3://my-billing-bucket/cost-summary.json"
+
+# Specify target bucket with relative output path
+aws-cost-report generate --output="monthly-report.csv" --format=csv --s3-bucket="my-billing-bucket"
 ```

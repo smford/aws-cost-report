@@ -408,6 +408,16 @@ source &lt;(aws-cost-report completion bash)
 # Fish:
 aws-cost-report completion fish | source</code></pre>
 
+      <h3>Exporting Reports to Amazon S3</h3>
+      <p>Save formatted reports and JSON metric summaries directly to an S3 bucket via <code>s3://</code> URIs or bucket flags:</p>
+      <pre><code># Export markdown report directly to S3:
+aws-cost-report generate --compare --output="s3://my-billing-bucket/reports/2026-10.md"
+
+# Export report and JSON summary simultaneously to S3:
+aws-cost-report generate --compare \
+  --output="s3://my-billing-bucket/cost-report.md" \
+  --json-summary="s3://my-billing-bucket/cost-summary.json"</code></pre>
+
       <h3>SRE Workflow with Threshold Outputs</h3>
       <pre><code>- name: Run AWS Cost Report
   id: cost
