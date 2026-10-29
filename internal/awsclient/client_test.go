@@ -9,6 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/costexplorer"
 	cetypes "github.com/aws/aws-sdk-go-v2/service/costexplorer/types"
+	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 
 	"github.com/smford/aws-cost-report/internal/config"
@@ -44,6 +45,20 @@ type mockSTSClient struct {
 func (m *mockSTSClient) GetCallerIdentity(ctx context.Context, params *sts.GetCallerIdentityInput, optFns ...func(*sts.Options)) (*sts.GetCallerIdentityOutput, error) {
 	return &sts.GetCallerIdentityOutput{
 		Account: aws.String(m.accountID),
+	}, nil
+}
+
+type mockIAMClient struct {
+	aliases []string
+	err     error
+}
+
+func (m *mockIAMClient) ListAccountAliases(ctx context.Context, params *iam.ListAccountAliasesInput, optFns ...func(*iam.Options)) (*iam.ListAccountAliasesOutput, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	return &iam.ListAccountAliasesOutput{
+		AccountAliases: m.aliases,
 	}, nil
 }
 
@@ -580,5 +595,102 @@ func TestAccountNameDirectInMockReport(t *testing.T) {
 	}
 	if report.Metadata.AccountName != "FinOps Analytics" {
 		t.Errorf("expected AccountName 'FinOps Analytics', got %q", report.Metadata.AccountName)
+	}
+}
+
+func TestAutoDetectAccountAliasFromIAM(t *testing.T) {
+	page := &costexplorer.GetCostAndUsageOutput{
+		ResultsByTime: []cetypes.ResultByTime{
+			{
+				Total: map[string]cetypes.MetricValue{
+					"UnblendedCost": {Amount: aws.String("10.00"), Unit: aws.String("USD")},
+				},
+			},
+		},
+	}
+	ceMock := &mockCEClient{pages: []*costexplorer.GetCostAndUsageOutput{page}}
+	stsMock := &mockSTSClient{accountID: "111222333444"}
+	iamMock := &mockIAMClient{aliases: []string{"acme-corp-prod"}}
+
+	client := NewClient(ceMock, stsMock, iamMock)
+	cfg := config.DefaultConfig()
+
+	refTime := time.Date(2026, time.October, 28, 12, 0, 0, 0, time.UTC)
+	report, err := client.GenerateReport(context.Background(), cfg, refTime)
+	if err != nil {
+		t.Fatalf("GenerateReport failed: %v", err)
+	}
+
+	expectedID := "111222333444 (acme-corp-prod)"
+	if report.Metadata.AccountID != expectedID {
+		t.Errorf("expected AccountID %q, got %q", expectedID, report.Metadata.AccountID)
+	}
+	if report.Metadata.AccountName != "acme-corp-prod" {
+		t.Errorf("expected AccountName 'acme-corp-prod', got %q", report.Metadata.AccountName)
+	}
+}
+
+func TestIAMListAccountAliasesErrorGraceful(t *testing.T) {
+	page := &costexplorer.GetCostAndUsageOutput{
+		ResultsByTime: []cetypes.ResultByTime{
+			{
+				Total: map[string]cetypes.MetricValue{
+					"UnblendedCost": {Amount: aws.String("10.00"), Unit: aws.String("USD")},
+				},
+			},
+		},
+	}
+	ceMock := &mockCEClient{pages: []*costexplorer.GetCostAndUsageOutput{page}}
+	stsMock := &mockSTSClient{accountID: "111222333444"}
+	iamMock := &mockIAMClient{err: errors.New("AccessDeniedException: not authorized to perform iam:ListAccountAliases")}
+
+	client := NewClient(ceMock, stsMock, iamMock)
+	cfg := config.DefaultConfig()
+
+	refTime := time.Date(2026, time.October, 28, 12, 0, 0, 0, time.UTC)
+	report, err := client.GenerateReport(context.Background(), cfg, refTime)
+	if err != nil {
+		t.Fatalf("GenerateReport should not fail when IAM errors: %v", err)
+	}
+
+	expectedID := "111222333444"
+	if report.Metadata.AccountID != expectedID {
+		t.Errorf("expected AccountID %q, got %q", expectedID, report.Metadata.AccountID)
+	}
+	if report.Metadata.AccountName != "" {
+		t.Errorf("expected empty AccountName, got %q", report.Metadata.AccountName)
+	}
+}
+
+func TestExplicitNameOverridesIAMAlias(t *testing.T) {
+	page := &costexplorer.GetCostAndUsageOutput{
+		ResultsByTime: []cetypes.ResultByTime{
+			{
+				Total: map[string]cetypes.MetricValue{
+					"UnblendedCost": {Amount: aws.String("10.00"), Unit: aws.String("USD")},
+				},
+			},
+		},
+	}
+	ceMock := &mockCEClient{pages: []*costexplorer.GetCostAndUsageOutput{page}}
+	stsMock := &mockSTSClient{accountID: "111222333444"}
+	iamMock := &mockIAMClient{aliases: []string{"iam-alias-ignored"}}
+
+	client := NewClient(ceMock, stsMock, iamMock)
+	cfg := config.DefaultConfig()
+	cfg.AccountName = "Explicit CLI Name"
+
+	refTime := time.Date(2026, time.October, 28, 12, 0, 0, 0, time.UTC)
+	report, err := client.GenerateReport(context.Background(), cfg, refTime)
+	if err != nil {
+		t.Fatalf("GenerateReport failed: %v", err)
+	}
+
+	expectedID := "111222333444 (Explicit CLI Name)"
+	if report.Metadata.AccountID != expectedID {
+		t.Errorf("expected AccountID %q, got %q", expectedID, report.Metadata.AccountID)
+	}
+	if report.Metadata.AccountName != "Explicit CLI Name" {
+		t.Errorf("expected AccountName 'Explicit CLI Name', got %q", report.Metadata.AccountName)
 	}
 }

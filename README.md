@@ -141,11 +141,17 @@ Calculates absolute delta and percentage shift compared to the preceding period:
 aws-cost-report generate --compare
 ```
 
-### 3. Human-Readable AWS Account Labeling (`--name`)
-Display a friendly human-readable name for the AWS account alongside the 12-digit AWS Account ID in report headers:
+### 3. Human-Readable AWS Account Labeling (`--name` & Auto-Discovery)
+`aws-cost-report` displays a friendly human-readable name for your AWS account alongside the 12-digit AWS Account ID in report headers.
+
+**Automatic Discovery**:
+If `--name` and config `name:` are omitted, `aws-cost-report` automatically queries AWS IAM (`iam:ListAccountAliases`) to resolve your account's IAM Account Alias (e.g. `my-company-prod`). If the role lacks IAM permissions or no alias is set, it falls back cleanly to the numeric Account ID without error.
+
+**Manual / Config Overrides**:
+You can also explicitly supply or override the account name via CLI flag or configuration:
 
 ```bash
-# Label account from CLI
+# Explicitly set account name via CLI
 aws-cost-report generate --compare --name="Production Core"
 ```
 
@@ -520,9 +526,17 @@ To run `aws-cost-report`, the executing IAM principal requires read permissions 
       "Effect": "Allow",
       "Action": "sts:GetCallerIdentity",
       "Resource": "*"
+    },
+    {
+      "Sid": "OptionalAccountAliasLookup",
+      "Effect": "Allow",
+      "Action": "iam:ListAccountAliases",
+      "Resource": "*"
     }
   ]
 }
+
+*Note: `iam:ListAccountAliases` is optional; it enables automatic discovery of your IAM account alias when `--name` is omitted.*
 ```
 
 ---

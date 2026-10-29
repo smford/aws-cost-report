@@ -87,10 +87,10 @@ Running `aws-cost-report` without arguments prints help instantly (zero AWS auth
 # Display instant CLI help
 aws-cost-report
 
-# Generate Month-over-Month report
+# Generate Month-over-Month report (auto-resolves IAM account alias if configured)
 aws-cost-report generate --compare
 
-# Label report with a human-readable AWS account name
+# Explicitly override report with a custom human-readable account name
 aws-cost-report generate --compare --name="Production Core"
 
 # List official AWS Cost Explorer service names

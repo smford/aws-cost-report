@@ -15,6 +15,7 @@ import (
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/costexplorer"
 	cetypes "github.com/aws/aws-sdk-go-v2/service/costexplorer/types"
+	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 
 	"github.com/smford/aws-cost-report/internal/config"
@@ -31,18 +32,28 @@ type STSAPI interface {
 	GetCallerIdentity(ctx context.Context, params *sts.GetCallerIdentityInput, optFns ...func(*sts.Options)) (*sts.GetCallerIdentityOutput, error)
 }
 
-// Client orchestrates AWS API queries across STS and Cost Explorer.
+// IAMAPI defines the required IAM client interface for account alias detection.
+type IAMAPI interface {
+	ListAccountAliases(ctx context.Context, params *iam.ListAccountAliasesInput, optFns ...func(*iam.Options)) (*iam.ListAccountAliasesOutput, error)
+}
+
+// Client orchestrates AWS API queries across STS, IAM, and Cost Explorer.
 type Client struct {
 	ceClient  CostExplorerAPI
 	stsClient STSAPI
+	iamClient IAMAPI
 }
 
 // NewClient creates a new AWS client instance.
-func NewClient(ce CostExplorerAPI, s STSAPI) *Client {
-	return &Client{
+func NewClient(ce CostExplorerAPI, s STSAPI, i ...IAMAPI) *Client {
+	c := &Client{
 		ceClient:  ce,
 		stsClient: s,
 	}
+	if len(i) > 0 {
+		c.iamClient = i[0]
+	}
+	return c
 }
 
 // NewRealClient initializes authentic AWS SDK v2 clients using the default credential chain.
@@ -55,8 +66,9 @@ func NewRealClient(ctx context.Context) (*Client, error) {
 
 	stsClient := sts.NewFromConfig(cfg)
 	ceClient := costexplorer.NewFromConfig(cfg)
+	iamClient := iam.NewFromConfig(cfg)
 
-	return NewClient(ceClient, stsClient), nil
+	return NewClient(ceClient, stsClient, iamClient), nil
 }
 
 // HasSTS returns true if an STS client is configured.
@@ -94,6 +106,16 @@ func (c *Client) GenerateReport(ctx context.Context, cfg *config.Config, now tim
 		}
 		if callerID.Account != nil {
 			accountID = *callerID.Account
+		}
+	}
+
+	// 1b. Auto-detect account alias via IAM if not explicitly provided
+	resolvedAccountName := cfg.AccountName
+	if resolvedAccountName == "" && c.iamClient != nil {
+		if aliasOut, err := c.iamClient.ListAccountAliases(ctx, &iam.ListAccountAliasesInput{}); err == nil && aliasOut != nil {
+			if len(aliasOut.AccountAliases) > 0 && aliasOut.AccountAliases[0] != "" {
+				resolvedAccountName = aliasOut.AccountAliases[0]
+			}
 		}
 	}
 
@@ -313,13 +335,13 @@ func (c *Client) GenerateReport(ctx context.Context, cfg *config.Config, now tim
 		for i := range filtered {
 			itemAccountName := ""
 			if filtered[i].Name == accountID {
-				itemAccountName = cfg.AccountName
+				itemAccountName = resolvedAccountName
 			}
 			filtered[i].Name = resolveAccountName(filtered[i].Name, cfg.Accounts, itemAccountName)
 		}
 	}
-	report.Metadata.AccountID = resolveAccountName(accountID, cfg.Accounts, cfg.AccountName)
-	report.Metadata.AccountName = cfg.AccountName
+	report.Metadata.AccountID = resolveAccountName(accountID, cfg.Accounts, resolvedAccountName)
+	report.Metadata.AccountName = resolvedAccountName
 	if report.Metadata.AccountName == "" && cfg.Accounts != nil {
 		report.Metadata.AccountName = cfg.Accounts[accountID]
 	}
