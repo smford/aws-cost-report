@@ -108,6 +108,15 @@ runs:
           exit 0
         fi
 
+        # If running within repository source workspace and Go is installed, build fresh binary
+        if [ -f "./cmd/aws-cost-report/main.go" ] && command -v go >/dev/null 2>&1; then
+          echo "Found repository Go sources; compiling local binary..."
+          mkdir -p "./bin"
+          CGO_ENABLED=0 go build -ldflags="-s -w" -o "./bin/aws-cost-report" ./cmd/aws-cost-report
+          echo "$(pwd)/bin" >> "$GITHUB_PATH"
+          exit 0
+        fi
+
         OS_NAME="$(uname -s | tr '[:upper:]' '[:lower:]')"
         ARCH_NAME="$(uname -m)"
 
