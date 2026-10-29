@@ -47,7 +47,7 @@ USAGE:
 COMMANDS:
   generate          Generate monthly billing and usage cost report (default)
   services          List official AWS Cost Explorer service names available in your account
-  server            Run as an HTTP service daemon exposing /healthz, /readyz, and /report
+  server            Run as an HTTP service daemon exposing /healthz, /readyz, /report, and /metrics
   version           Print application version metadata and exit
   help              Display this help message
 
@@ -57,7 +57,7 @@ GENERATE FLAGS:
   --current-month         Alias for --mtd
   --monthly               Display multi-month historical breakdown with each month as a separate column (default: 12 months)
   --trend                 Alias for --monthly
-  --format <string>       Output format: table (default), markdown, json, csv
+  --format <string>       Output format: table (default), markdown, json, csv, prometheus
   --months <int>          Number of historical complete months back to query (default: 1)
   --start <YYYY-MM-DD>    Explicit billing start date (inclusive)
   --end <YYYY-MM-DD>      Explicit billing end date (inclusive)
@@ -273,6 +273,11 @@ func runCLI(cfg *config.Config) {
 			fmt.Fprintf(os.Stderr, "Error rendering CSV: %v\n", err)
 			os.Exit(1)
 		}
+	case "prometheus", "prom":
+		if err := renderer.RenderPrometheus(outWriter, report, cfg.Budget.FailOnThreshold, version, commit, date); err != nil {
+			fmt.Fprintf(os.Stderr, "Error rendering prometheus: %v\n", err)
+			os.Exit(1)
+		}
 	default:
 		if err := renderer.RenderTable(outWriter, report, cfg.NoColor); err != nil {
 			fmt.Fprintf(os.Stderr, "Error rendering table: %v\n", err)
@@ -435,6 +440,70 @@ func runServer(cfg *config.Config) {
 		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ready", "account": accountID})
 	})
 
+	mux.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 1*time.Minute)
+		defer cancel()
+
+		reqCfg := *cfg
+		q := r.URL.Query()
+
+		if cmp := q.Get("compare"); cmp != "" {
+			reqCfg.CompareMoM = (cmp == "true" || cmp == "1")
+		} else {
+			reqCfg.CompareMoM = true
+		}
+		if gb := q.Get("group-by"); gb != "" {
+			if strings.HasPrefix(strings.ToUpper(gb), "TAG:") {
+				reqCfg.Grouping.Type = "TAG"
+				reqCfg.Grouping.Key = gb[4:]
+			} else {
+				reqCfg.Grouping.Type = "DIMENSION"
+				reqCfg.Grouping.Key = strings.ToUpper(gb)
+			}
+		}
+		if n := q.Get("name"); n != "" {
+			reqCfg.AccountName = n
+		}
+		if mtd := q.Get("mtd"); mtd == "true" || mtd == "1" {
+			reqCfg.MTD = true
+		}
+
+		cacheKey := fmt.Sprintf("metrics:%v:%s:%s:%d:%s:%v:%s:%d:%.2f:%v:%s:%s:%v",
+			reqCfg.CompareMoM, reqCfg.StartDate, reqCfg.EndDate,
+			reqCfg.MonthsBack, reqCfg.Grouping.Key, reqCfg.Filters,
+			reqCfg.TagFilters.Format(),
+			reqCfg.Defaults.Top, reqCfg.Defaults.MinDisplayCost,
+			reqCfg.Monthly, reqCfg.AccountName, reqCfg.Defaults.Currency, reqCfg.MTD)
+
+		report, ok := cache.Get(cacheKey)
+		if !ok {
+			var client *awsclient.Client
+			if reqCfg.MockMode {
+				client = awsclient.NewClient(nil, nil)
+			} else {
+				var err error
+				client, err = awsclient.NewRealClient(ctx)
+				if err != nil {
+					w.WriteHeader(http.StatusServiceUnavailable)
+					fmt.Fprintf(w, "# Error connecting to AWS: %v\n", err)
+					return
+				}
+			}
+
+			var err error
+			report, err = client.GenerateReport(ctx, &reqCfg, time.Now())
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				fmt.Fprintf(w, "# Error generating report: %v\n", err)
+				return
+			}
+			cache.Set(cacheKey, report)
+		}
+
+		w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+		_ = renderer.RenderPrometheus(w, report, reqCfg.Budget.FailOnThreshold, version, commit, date)
+	})
+
 	mux.HandleFunc("/report", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 1*time.Minute)
 		defer cancel()
@@ -581,6 +650,9 @@ func runServer(cfg *config.Config) {
 		case "csv":
 			w.Header().Set("Content-Type", "text/csv; charset=utf-8")
 			_ = renderer.RenderCSV(w, report)
+		case "prometheus", "prom":
+			w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+			_ = renderer.RenderPrometheus(w, report, reqCfg.Budget.FailOnThreshold, version, commit, date)
 		default:
 			w.Header().Set("Content-Type", "application/json")
 			_ = renderer.RenderJSON(w, report)

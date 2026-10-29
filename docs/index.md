@@ -182,3 +182,20 @@ aws-cost-report generate --mtd
 # Compare current MTD spend against the same day window last month
 aws-cost-report generate --mtd --compare
 ```
+
+---
+
+## Prometheus Metrics Exporter & Daemon
+
+Expose real-time AWS cost metrics in standard Prometheus exposition format (`version 0.0.4`) for Prometheus and Grafana:
+
+```bash
+# Start HTTP daemon on port 8080
+aws-cost-report --server
+
+# Scrape Prometheus metrics
+curl http://localhost:8080/metrics
+
+# Or export metrics directly via CLI
+aws-cost-report generate --format=prometheus
+```

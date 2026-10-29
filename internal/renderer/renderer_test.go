@@ -299,3 +299,41 @@ func TestRenderMonthlyBreakdown(t *testing.T) {
 		t.Errorf("expected 'monthly_breakdown' key in JSON")
 	}
 }
+
+func TestRenderPrometheus(t *testing.T) {
+	report := getTestReport(true)
+	report.Metadata.AccountName = "Production Core"
+
+	var buf bytes.Buffer
+	err := RenderPrometheus(&buf, report, 20.00, "v0.9.0", "abcdef1", "2026-10-29")
+	if err != nil {
+		t.Fatalf("RenderPrometheus failed: %v", err)
+	}
+
+	out := buf.String()
+
+	// Verify build info
+	if !strings.Contains(out, `aws_cost_report_build_info{version="v0.9.0",commit="abcdef1",build_date="2026-10-29"} 1`) {
+		t.Errorf("expected build_info metric, got:\n%s", out)
+	}
+
+	// Verify total unblended
+	if !strings.Contains(out, `aws_cost_report_total_unblended_dollars{account="715195480427",account_name="Production Core",currency="USD",billing_month="September 2026"} 21.58`) {
+		t.Errorf("expected total_unblended_dollars, got:\n%s", out)
+	}
+
+	// Verify MoM delta
+	if !strings.Contains(out, `aws_cost_report_mom_delta_dollars{`) || !strings.Contains(out, ` 0.45`) {
+		t.Errorf("expected mom_delta_dollars in output, got:\n%s", out)
+	}
+
+	// Verify budget threshold breach (21.58 > 20.00 -> 1)
+	if !strings.Contains(out, `aws_cost_report_budget_threshold_breached{`) || !strings.Contains(out, ` 1`) {
+		t.Errorf("expected budget_threshold_breached = 1, got:\n%s", out)
+	}
+
+	// Verify service item
+	if !strings.Contains(out, `aws_cost_report_service_unblended_dollars{account="715195480427",account_name="Production Core",currency="USD",billing_month="September 2026",dimension="SERVICE",item="Amazon DynamoDB"} 5.51`) {
+		t.Errorf("expected service_unblended_dollars for DynamoDB, got:\n%s", out)
+	}
+}

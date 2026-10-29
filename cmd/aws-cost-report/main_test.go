@@ -276,3 +276,36 @@ func TestReportCacheEvictionAndKeys(t *testing.T) {
 		t.Errorf("expected k4 to have expired")
 	}
 }
+
+func TestRunCLIMockModePrometheus(t *testing.T) {
+	tmpDir := t.TempDir()
+	outFile := tmpDir + "/metrics.prom"
+
+	cfg, err := config.LoadConfig([]string{
+		"--mock",
+		"--compare",
+		"--format", "prometheus",
+		"--output", outFile,
+	})
+	if err != nil {
+		t.Fatalf("failed to load config: %v", err)
+	}
+
+	runCLI(cfg)
+
+	data, err := os.ReadFile(outFile)
+	if err != nil {
+		t.Fatalf("failed to read prometheus output: %v", err)
+	}
+	content := string(data)
+
+	if !strings.Contains(content, "aws_cost_report_build_info") {
+		t.Errorf("expected aws_cost_report_build_info in output, got:\n%s", content)
+	}
+	if !strings.Contains(content, "aws_cost_report_total_unblended_dollars") {
+		t.Errorf("expected aws_cost_report_total_unblended_dollars in output, got:\n%s", content)
+	}
+	if !strings.Contains(content, "aws_cost_report_service_unblended_dollars") {
+		t.Errorf("expected aws_cost_report_service_unblended_dollars in output, got:\n%s", content)
+	}
+}

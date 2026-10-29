@@ -38,6 +38,7 @@ A production-grade, zero-dependency (outside official AWS SDK v2 and YAML parser
   - `markdown`: GitHub-flavored Markdown automatically written to `$GITHUB_STEP_SUMMARY` in CI/CD.
   - `json`: Structured JSON array for downstream analytics and log aggregators.
   - `csv`: Standard CSV format with column headers.
+  - `prometheus`: Standard Prometheus text exposition format (version 0.0.4) for metrics scraping and dashboards.
 - **Built-in Rate Limiting & Resilience**: Employs exponential backoff with jitter to absorb AWS Cost Explorer API rate limits (`LimitExceededException`).
 - **Concurrent Comparison Fetching**: Fetches current and historical periods concurrently, reducing query latency by 50%.
 - **Zero-AWS Offline Mode (`--mock`)**: Generates realistic simulated billing data for testing pipelines and local evaluations without active AWS credentials.
@@ -560,8 +561,9 @@ aws-cost-report --server --mock
 
 - **`GET /healthz`**: Liveness probe returning `{"status":"ok","version":"..."}`.
 - **`GET /readyz`**: Readiness probe verifying AWS credential authentication and STS caller identity (or mock readiness).
+- **`GET /metrics`**: Prometheus metrics exposition endpoint (`text/plain; version=0.0.4`) exposing account totals, service-by-service costs, MoM deltas, and budget guardrail alerts for Prometheus and Grafana.
 - **`GET /report`**: Generates reports dynamically with 15-minute in-memory caching to avoid AWS Cost Explorer rate limits (`LimitExceededException`).
-  - Supports query parameters: `?format=markdown&compare=true&top=5&months=1&group-by=SERVICE`.
+  - Supports query parameters: `?format=markdown&compare=true&top=5&months=1&group-by=SERVICE`. Format options: `table`, `markdown`, `json`, `csv`, `prometheus`.
 
 ---
 
@@ -611,7 +613,7 @@ To run `aws-cost-report`, the executing IAM principal requires read permissions 
 |:---|:---|
 | `generate` | Generate monthly billing and usage cost report (default report engine) |
 | `services` | List official AWS Cost Explorer service names available in your account |
-| `server` | Run as an HTTP service daemon exposing `/healthz`, `/readyz`, and `/report` |
+| `server` | Run as an HTTP service daemon exposing `/healthz`, `/readyz`, `/report`, and `/metrics` |
 | `version` | Display application version, commit SHA, build date, and license |
 | `help` | Display command-line usage and help information |
 
@@ -624,7 +626,7 @@ To run `aws-cost-report`, the executing IAM principal requires read permissions 
 | `--compare` | | `false` | Enable Month-over-Month (MoM) comparison against preceding billing period |
 | `--mtd` | `--current-month` | `false` | Query Month-to-Date spend from the 1st of the current month up to today |
 | `--monthly` | `--trend` | `false` | Display multi-month historical breakdown with each month as a separate column (default: 12 months) |
-| `--format` | | `table` | Output format: `table`, `markdown`, `json`, `csv` |
+| `--format` | | `table` | Output format: `table`, `markdown`, `json`, `csv`, `prometheus` |
 | `--filter` | `--service` | | Filter services by official name (`Amazon DynamoDB`), alias (`S3`, `EC2`), or substring |
 | `--tag` | `--tag-filter` | | Filter costs by AWS Cost Allocation Tag (e.g. `Environment=Production` or `Team=Core,API`) |
 | `--top` | | `0` | Show top N highest cost items and aggregate remainder into "Other Services" |
