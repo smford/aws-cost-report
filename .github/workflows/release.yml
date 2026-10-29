@@ -53,11 +53,11 @@ jobs:
           elif [ -n "${{ inputs.tag }}" ]; then
             TAG_NAME="${{ inputs.tag }}"
           else
-            HEAD_TAG=$(git tag --points-at HEAD | head -n1 || true)
+            HEAD_TAG=$(git tag --points-at HEAD | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+' | head -n1 || true)
             if [ -n "$HEAD_TAG" ]; then
               TAG_NAME="$HEAD_TAG"
             else
-              LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+              LATEST_TAG=$(git describe --tags --abbrev=0 --match="v[0-9]*.[0-9]*.[0-9]*" 2>/dev/null || echo "v0.0.0")
               CLEAN_TAG="${LATEST_TAG#v}"
               MAJOR=$(echo "$CLEAN_TAG" | cut -d. -f1)
               MINOR=$(echo "$CLEAN_TAG" | cut -d. -f2)

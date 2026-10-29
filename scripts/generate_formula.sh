@@ -11,7 +11,7 @@ if [ -z "$VERSION" ]; then
     VERSION="${GITHUB_REF_NAME#v}"
     TAG_NAME="${GITHUB_REF_NAME}"
   else
-    LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.1.0")
+    LATEST_TAG=$(git describe --tags --abbrev=0 --match="v[0-9]*.[0-9]*.[0-9]*" 2>/dev/null || echo "v0.1.0")
     VERSION="${LATEST_TAG#v}"
     TAG_NAME="$LATEST_TAG"
   fi
