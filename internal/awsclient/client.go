@@ -238,6 +238,59 @@ func (c *Client) GenerateReport(ctx context.Context, cfg *config.Config, now tim
 		}
 	}
 
+	// Recalculate totals if filters were applied or if initial totals were empty
+	if len(cfg.Filters) > 0 || (report.Totals.UnblendedCost == 0.0 && len(filtered) > 0) {
+		var uCost, bCost, aCost, prevUCost, prevBCost, prevACost float64
+		for _, it := range filtered {
+			uCost += it.UnblendedCost
+			bCost += it.BlendedCost
+			aCost += it.AmortizedCost
+			if it.HasPreviousCost {
+				prevUCost += it.PrevUnblendedCost
+				prevBCost += it.PrevBlendedCost
+				prevACost += it.PrevAmortizedCost
+			}
+		}
+		uCost = roundToTwo(uCost)
+		bCost = roundToTwo(bCost)
+		aCost = roundToTwo(aCost)
+		prevUCost = roundToTwo(prevUCost)
+		prevBCost = roundToTwo(prevBCost)
+		prevACost = roundToTwo(prevACost)
+		dAmount := roundToTwo(uCost - prevUCost)
+		dPct := 0.0
+		if prevUCost > 0 {
+			dPct = roundToTwo((dAmount / prevUCost) * 100.0)
+		}
+
+		report.Totals = TotalCosts{
+			UnblendedCost:     uCost,
+			BlendedCost:       bCost,
+			AmortizedCost:     aCost,
+			PrevUnblendedCost: prevUCost,
+			PrevBlendedCost:   prevBCost,
+			PrevAmortizedCost: prevACost,
+			MoMDeltaAmount:    dAmount,
+			MoMDeltaPercent:   dPct,
+			HasPreviousCost:   cfg.CompareMoM,
+		}
+	}
+
+	if report.Totals.BlendedCost == 0.0 && report.Totals.UnblendedCost > 0.0 {
+		report.Totals.BlendedCost = report.Totals.UnblendedCost
+	}
+	if report.Totals.AmortizedCost == 0.0 && report.Totals.UnblendedCost > 0.0 {
+		report.Totals.AmortizedCost = report.Totals.UnblendedCost
+	}
+	if cfg.CompareMoM {
+		if report.Totals.PrevBlendedCost == 0.0 && report.Totals.PrevUnblendedCost > 0.0 {
+			report.Totals.PrevBlendedCost = report.Totals.PrevUnblendedCost
+		}
+		if report.Totals.PrevAmortizedCost == 0.0 && report.Totals.PrevUnblendedCost > 0.0 {
+			report.Totals.PrevAmortizedCost = report.Totals.PrevUnblendedCost
+		}
+	}
+
 	// Sort by UnblendedCost descending
 	sort.Slice(filtered, func(i, j int) bool {
 		if filtered[i].UnblendedCost != filtered[j].UnblendedCost {
@@ -390,11 +443,45 @@ func (c *Client) fetchCostData(ctx context.Context, cfg *config.Config, dateRang
 	totals.AmortizedCost = roundToTwo(totals.AmortizedCost)
 
 	var items []LineItem
+	var sumUnblended, sumBlended, sumAmortized float64
 	for _, item := range itemsMap {
 		item.UnblendedCost = roundToTwo(item.UnblendedCost)
 		item.BlendedCost = roundToTwo(item.BlendedCost)
 		item.AmortizedCost = roundToTwo(item.AmortizedCost)
+
+		// For accounts without consolidated billing or upfront amortization,
+		// BlendedCost or AmortizedCost might be returned as 0 by AWS. Fall back to UnblendedCost if so.
+		if item.BlendedCost == 0.0 && item.UnblendedCost > 0.0 {
+			item.BlendedCost = item.UnblendedCost
+		}
+		if item.AmortizedCost == 0.0 && item.UnblendedCost > 0.0 {
+			item.AmortizedCost = item.UnblendedCost
+		}
+
+		sumUnblended += item.UnblendedCost
+		sumBlended += item.BlendedCost
+		sumAmortized += item.AmortizedCost
 		items = append(items, *item)
+	}
+
+	// When GroupBy is passed to GetCostAndUsage, AWS omits ResultByTime.Total.
+	// In that case, compute totals from the aggregated line items.
+	if totals.UnblendedCost == 0.0 && sumUnblended > 0.0 {
+		totals.UnblendedCost = roundToTwo(sumUnblended)
+	}
+	if totals.BlendedCost == 0.0 && sumBlended > 0.0 {
+		totals.BlendedCost = roundToTwo(sumBlended)
+	}
+	if totals.AmortizedCost == 0.0 && sumAmortized > 0.0 {
+		totals.AmortizedCost = roundToTwo(sumAmortized)
+	}
+
+	// Fallback for totals if Blended or Amortized are still 0.0 but Unblended > 0.0
+	if totals.BlendedCost == 0.0 && totals.UnblendedCost > 0.0 {
+		totals.BlendedCost = totals.UnblendedCost
+	}
+	if totals.AmortizedCost == 0.0 && totals.UnblendedCost > 0.0 {
+		totals.AmortizedCost = totals.UnblendedCost
 	}
 
 	return totals, items, nil
@@ -408,20 +495,20 @@ func GenerateMockReport(cfg *config.Config, now time.Time) (*CostReport, error) 
 	}
 
 	items := []LineItem{
-		{Name: "Amazon DynamoDB", UnblendedCost: 5.51, BlendedCost: 5.51, AmortizedCost: 5.51, PrevUnblendedCost: 5.20, HasPreviousCost: true, MoMDeltaAmount: 0.31, MoMDeltaPercent: 5.96},
-		{Name: "AWS Config", UnblendedCost: 4.73, BlendedCost: 4.73, AmortizedCost: 4.73, PrevUnblendedCost: 4.80, HasPreviousCost: true, MoMDeltaAmount: -0.07, MoMDeltaPercent: -1.46},
-		{Name: "Amazon Cognito", UnblendedCost: 4.17, BlendedCost: 4.17, AmortizedCost: 4.17, PrevUnblendedCost: 4.15, HasPreviousCost: true, MoMDeltaAmount: 0.02, MoMDeltaPercent: 0.48},
-		{Name: "Tax", UnblendedCost: 2.89, BlendedCost: 2.89, AmortizedCost: 2.89, PrevUnblendedCost: 2.80, HasPreviousCost: true, MoMDeltaAmount: 0.09, MoMDeltaPercent: 3.21},
-		{Name: "AWS Key Management Service", UnblendedCost: 1.00, BlendedCost: 1.00, AmortizedCost: 1.00, PrevUnblendedCost: 1.00, HasPreviousCost: true, MoMDeltaAmount: 0.00, MoMDeltaPercent: 0.00},
-		{Name: "Amazon Simple Storage Service", UnblendedCost: 0.94, BlendedCost: 0.94, AmortizedCost: 0.94, PrevUnblendedCost: 0.88, HasPreviousCost: true, MoMDeltaAmount: 0.06, MoMDeltaPercent: 6.82},
-		{Name: "Amazon Route 53", UnblendedCost: 0.80, BlendedCost: 0.80, AmortizedCost: 0.80, PrevUnblendedCost: 0.80, HasPreviousCost: true, MoMDeltaAmount: 0.00, MoMDeltaPercent: 0.00},
-		{Name: "Amazon CloudWatch", UnblendedCost: 0.65, BlendedCost: 0.65, AmortizedCost: 0.65, PrevUnblendedCost: 0.70, HasPreviousCost: true, MoMDeltaAmount: -0.05, MoMDeltaPercent: -7.14},
-		{Name: "AWS Secrets Manager", UnblendedCost: 0.40, BlendedCost: 0.40, AmortizedCost: 0.40, PrevUnblendedCost: 0.40, HasPreviousCost: true, MoMDeltaAmount: 0.00, MoMDeltaPercent: 0.00},
-		{Name: "AWS Lambda", UnblendedCost: 0.25, BlendedCost: 0.25, AmortizedCost: 0.25, PrevUnblendedCost: 0.18, HasPreviousCost: true, MoMDeltaAmount: 0.07, MoMDeltaPercent: 38.89},
-		{Name: "Amazon Virtual Private Cloud", UnblendedCost: 0.12, BlendedCost: 0.12, AmortizedCost: 0.12, PrevUnblendedCost: 0.12, HasPreviousCost: true, MoMDeltaAmount: 0.00, MoMDeltaPercent: 0.00},
-		{Name: "Amazon Simple Notification Service", UnblendedCost: 0.06, BlendedCost: 0.06, AmortizedCost: 0.06, PrevUnblendedCost: 0.05, HasPreviousCost: true, MoMDeltaAmount: 0.01, MoMDeltaPercent: 20.00},
-		{Name: "AWS Step Functions", UnblendedCost: 0.04, BlendedCost: 0.04, AmortizedCost: 0.04, PrevUnblendedCost: 0.03, HasPreviousCost: true, MoMDeltaAmount: 0.01, MoMDeltaPercent: 33.33},
-		{Name: "AWS CloudTrail", UnblendedCost: 0.02, BlendedCost: 0.02, AmortizedCost: 0.02, PrevUnblendedCost: 0.02, HasPreviousCost: true, MoMDeltaAmount: 0.00, MoMDeltaPercent: 0.00},
+		{Name: "Amazon DynamoDB", UnblendedCost: 5.51, BlendedCost: 5.51, AmortizedCost: 5.51, PrevUnblendedCost: 5.20, PrevBlendedCost: 5.20, PrevAmortizedCost: 5.20, HasPreviousCost: true, MoMDeltaAmount: 0.31, MoMDeltaPercent: 5.96},
+		{Name: "AWS Config", UnblendedCost: 4.73, BlendedCost: 4.73, AmortizedCost: 4.73, PrevUnblendedCost: 4.80, PrevBlendedCost: 4.80, PrevAmortizedCost: 4.80, HasPreviousCost: true, MoMDeltaAmount: -0.07, MoMDeltaPercent: -1.46},
+		{Name: "Amazon Cognito", UnblendedCost: 4.17, BlendedCost: 4.17, AmortizedCost: 4.17, PrevUnblendedCost: 4.15, PrevBlendedCost: 4.15, PrevAmortizedCost: 4.15, HasPreviousCost: true, MoMDeltaAmount: 0.02, MoMDeltaPercent: 0.48},
+		{Name: "Tax", UnblendedCost: 2.89, BlendedCost: 2.89, AmortizedCost: 2.89, PrevUnblendedCost: 2.80, PrevBlendedCost: 2.80, PrevAmortizedCost: 2.80, HasPreviousCost: true, MoMDeltaAmount: 0.09, MoMDeltaPercent: 3.21},
+		{Name: "AWS Key Management Service", UnblendedCost: 1.00, BlendedCost: 1.00, AmortizedCost: 1.00, PrevUnblendedCost: 1.00, PrevBlendedCost: 1.00, PrevAmortizedCost: 1.00, HasPreviousCost: true, MoMDeltaAmount: 0.00, MoMDeltaPercent: 0.00},
+		{Name: "Amazon Simple Storage Service", UnblendedCost: 0.94, BlendedCost: 0.94, AmortizedCost: 0.94, PrevUnblendedCost: 0.88, PrevBlendedCost: 0.88, PrevAmortizedCost: 0.88, HasPreviousCost: true, MoMDeltaAmount: 0.06, MoMDeltaPercent: 6.82},
+		{Name: "Amazon Route 53", UnblendedCost: 0.80, BlendedCost: 0.80, AmortizedCost: 0.80, PrevUnblendedCost: 0.80, PrevBlendedCost: 0.80, PrevAmortizedCost: 0.80, HasPreviousCost: true, MoMDeltaAmount: 0.00, MoMDeltaPercent: 0.00},
+		{Name: "Amazon CloudWatch", UnblendedCost: 0.65, BlendedCost: 0.65, AmortizedCost: 0.65, PrevUnblendedCost: 0.70, PrevBlendedCost: 0.70, PrevAmortizedCost: 0.70, HasPreviousCost: true, MoMDeltaAmount: -0.05, MoMDeltaPercent: -7.14},
+		{Name: "AWS Secrets Manager", UnblendedCost: 0.40, BlendedCost: 0.40, AmortizedCost: 0.40, PrevUnblendedCost: 0.40, PrevBlendedCost: 0.40, PrevAmortizedCost: 0.40, HasPreviousCost: true, MoMDeltaAmount: 0.00, MoMDeltaPercent: 0.00},
+		{Name: "AWS Lambda", UnblendedCost: 0.25, BlendedCost: 0.25, AmortizedCost: 0.25, PrevUnblendedCost: 0.18, PrevBlendedCost: 0.18, PrevAmortizedCost: 0.18, HasPreviousCost: true, MoMDeltaAmount: 0.07, MoMDeltaPercent: 38.89},
+		{Name: "Amazon Virtual Private Cloud", UnblendedCost: 0.12, BlendedCost: 0.12, AmortizedCost: 0.12, PrevUnblendedCost: 0.12, PrevBlendedCost: 0.12, PrevAmortizedCost: 0.12, HasPreviousCost: true, MoMDeltaAmount: 0.00, MoMDeltaPercent: 0.00},
+		{Name: "Amazon Simple Notification Service", UnblendedCost: 0.06, BlendedCost: 0.06, AmortizedCost: 0.06, PrevUnblendedCost: 0.05, PrevBlendedCost: 0.05, PrevAmortizedCost: 0.05, HasPreviousCost: true, MoMDeltaAmount: 0.01, MoMDeltaPercent: 20.00},
+		{Name: "AWS Step Functions", UnblendedCost: 0.04, BlendedCost: 0.04, AmortizedCost: 0.04, PrevUnblendedCost: 0.03, PrevBlendedCost: 0.03, PrevAmortizedCost: 0.03, HasPreviousCost: true, MoMDeltaAmount: 0.01, MoMDeltaPercent: 33.33},
+		{Name: "AWS CloudTrail", UnblendedCost: 0.02, BlendedCost: 0.02, AmortizedCost: 0.02, PrevUnblendedCost: 0.02, PrevBlendedCost: 0.02, PrevAmortizedCost: 0.02, HasPreviousCost: true, MoMDeltaAmount: 0.00, MoMDeltaPercent: 0.00},
 	}
 
 	var filtered []LineItem
@@ -431,6 +518,75 @@ func GenerateMockReport(cfg *config.Config, now time.Time) (*CostReport, error) 
 		}
 		if item.UnblendedCost >= cfg.Defaults.MinDisplayCost {
 			filtered = append(filtered, item)
+		}
+	}
+
+	if len(cfg.TagFilters) > 0 {
+		var tagFiltered []LineItem
+		filterStr := strings.ToLower(cfg.TagFilters.Format())
+		for _, item := range filtered {
+			if strings.Contains(filterStr, "prod") {
+				if item.Name == "Tax" || item.Name == "Amazon Route 53" || item.Name == "Amazon Simple Notification Service" {
+					continue
+				}
+			} else if strings.Contains(filterStr, "stage") || strings.Contains(filterStr, "dev") {
+				if item.Name != "Amazon CloudWatch" && item.Name != "AWS Lambda" && item.Name != "AWS Step Functions" {
+					continue
+				}
+			}
+			tagFiltered = append(tagFiltered, item)
+		}
+		if len(tagFiltered) > 0 {
+			filtered = tagFiltered
+		}
+	}
+
+	totals := TotalCosts{
+		BlendedCost:       21.59,
+		UnblendedCost:     21.58,
+		AmortizedCost:     21.58,
+		PrevUnblendedCost: 21.13,
+		PrevBlendedCost:   21.14,
+		PrevAmortizedCost: 21.13,
+		MoMDeltaAmount:    0.45,
+		MoMDeltaPercent:   2.13,
+		HasPreviousCost:   cfg.CompareMoM,
+	}
+
+	if len(cfg.Filters) > 0 || len(cfg.TagFilters) > 0 {
+		var uCost, bCost, aCost, prevUCost, prevBCost, prevACost float64
+		for _, it := range filtered {
+			uCost += it.UnblendedCost
+			bCost += it.BlendedCost
+			aCost += it.AmortizedCost
+			if it.HasPreviousCost {
+				prevUCost += it.PrevUnblendedCost
+				prevBCost += it.PrevBlendedCost
+				prevACost += it.PrevAmortizedCost
+			}
+		}
+		uCost = roundToTwo(uCost)
+		bCost = roundToTwo(bCost)
+		aCost = roundToTwo(aCost)
+		prevUCost = roundToTwo(prevUCost)
+		prevBCost = roundToTwo(prevBCost)
+		prevACost = roundToTwo(prevACost)
+		dAmount := roundToTwo(uCost - prevUCost)
+		dPct := 0.0
+		if prevUCost > 0 {
+			dPct = roundToTwo((dAmount / prevUCost) * 100.0)
+		}
+
+		totals = TotalCosts{
+			BlendedCost:       bCost,
+			UnblendedCost:     uCost,
+			AmortizedCost:     aCost,
+			PrevUnblendedCost: prevUCost,
+			PrevBlendedCost:   prevBCost,
+			PrevAmortizedCost: prevACost,
+			MoMDeltaAmount:    dAmount,
+			MoMDeltaPercent:   dPct,
+			HasPreviousCost:   cfg.CompareMoM,
 		}
 	}
 
@@ -456,70 +612,9 @@ func GenerateMockReport(cfg *config.Config, now time.Time) (*CostReport, error) 
 			GroupKey:         cfg.Grouping.Key,
 			TagFilter:        cfg.TagFilters.Format(),
 		},
-		Totals: TotalCosts{
-			BlendedCost:       21.59,
-			UnblendedCost:     21.58,
-			AmortizedCost:     21.58,
-			PrevUnblendedCost: 21.13,
-			PrevBlendedCost:   21.14,
-			PrevAmortizedCost: 21.13,
-			MoMDeltaAmount:    0.45,
-			MoMDeltaPercent:   2.13,
-			HasPreviousCost:   cfg.CompareMoM,
-		},
+		Totals:        totals,
 		Items:         filtered,
 		HasComparison: cfg.CompareMoM,
-	}
-
-	if len(cfg.TagFilters) > 0 {
-		var tagFiltered []LineItem
-		filterStr := strings.ToLower(cfg.TagFilters.Format())
-		for _, item := range filtered {
-			if strings.Contains(filterStr, "prod") {
-				if item.Name == "Tax" || item.Name == "Amazon Route 53" || item.Name == "Amazon Simple Notification Service" {
-					continue
-				}
-			} else if strings.Contains(filterStr, "stage") || strings.Contains(filterStr, "dev") {
-				if item.Name != "Amazon CloudWatch" && item.Name != "AWS Lambda" && item.Name != "AWS Step Functions" {
-					continue
-				}
-			}
-			tagFiltered = append(tagFiltered, item)
-		}
-		if len(tagFiltered) > 0 {
-			filtered = tagFiltered
-		}
-
-		var uCost, bCost, aCost, prevUCost float64
-		for _, it := range filtered {
-			uCost += it.UnblendedCost
-			bCost += it.BlendedCost
-			aCost += it.AmortizedCost
-			prevUCost += it.PrevUnblendedCost
-		}
-		uCost = roundToTwo(uCost)
-		bCost = roundToTwo(bCost)
-		aCost = roundToTwo(aCost)
-		prevUCost = roundToTwo(prevUCost)
-		dAmount := roundToTwo(uCost - prevUCost)
-		dPct := 0.0
-		if prevUCost > 0 {
-			dPct = roundToTwo((dAmount / prevUCost) * 100.0)
-		}
-
-		report.Totals = TotalCosts{
-			BlendedCost:       bCost,
-			UnblendedCost:     uCost,
-			AmortizedCost:     aCost,
-			PrevUnblendedCost: prevUCost,
-			PrevBlendedCost:   prevUCost,
-			PrevAmortizedCost: prevUCost,
-			MoMDeltaAmount:    dAmount,
-			MoMDeltaPercent:   dPct,
-			HasPreviousCost:   cfg.CompareMoM,
-		}
-		report.Items = filtered
-		report.Metadata.ActiveServices = len(filtered)
 	}
 
 	if dateRange.IsEstimated {

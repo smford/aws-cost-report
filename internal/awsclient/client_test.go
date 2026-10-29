@@ -133,6 +133,116 @@ func TestClientPaginationAndAggregation(t *testing.T) {
 	}
 }
 
+// TestClientAggregationWhenTotalIsNil verifies that when AWS Cost Explorer omits ResultByTime.Total
+// (which AWS does whenever GroupBy is specified), totals are computed accurately from groups.
+func TestClientAggregationWhenTotalIsNil(t *testing.T) {
+	page := &costexplorer.GetCostAndUsageOutput{
+		NextPageToken: nil,
+		ResultsByTime: []cetypes.ResultByTime{
+			{
+				Total: nil, // Total omitted by AWS
+				Groups: []cetypes.Group{
+					{
+						Keys: []string{"Amazon DynamoDB"},
+						Metrics: map[string]cetypes.MetricValue{
+							"UnblendedCost": {Amount: aws.String("12.50")},
+							"BlendedCost":   {Amount: aws.String("12.50")},
+							"AmortizedCost": {Amount: aws.String("12.50")},
+						},
+					},
+					{
+						Keys: []string{"AWS Lambda"},
+						Metrics: map[string]cetypes.MetricValue{
+							"UnblendedCost": {Amount: aws.String("3.25")},
+							"BlendedCost":   {Amount: aws.String("3.25")},
+							"AmortizedCost": {Amount: aws.String("3.25")},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	ceMock := &mockCEClient{pages: []*costexplorer.GetCostAndUsageOutput{page}}
+	stsMock := &mockSTSClient{accountID: "123456789012"}
+
+	client := NewClient(ceMock, stsMock)
+	cfg := config.DefaultConfig()
+
+	refTime := time.Date(2026, time.October, 28, 12, 0, 0, 0, time.UTC)
+	report, err := client.GenerateReport(context.Background(), cfg, refTime)
+	if err != nil {
+		t.Fatalf("GenerateReport failed: %v", err)
+	}
+
+	expectedTotal := 15.75
+	if report.Totals.UnblendedCost != expectedTotal {
+		t.Errorf("expected UnblendedCost %f, got %f", expectedTotal, report.Totals.UnblendedCost)
+	}
+	if report.Totals.BlendedCost != expectedTotal {
+		t.Errorf("expected BlendedCost %f, got %f", expectedTotal, report.Totals.BlendedCost)
+	}
+	if report.Totals.AmortizedCost != expectedTotal {
+		t.Errorf("expected AmortizedCost %f, got %f", expectedTotal, report.Totals.AmortizedCost)
+	}
+}
+
+// TestGenerateReportFilteredTotals verifies that when filters are specified,
+// report.Totals reflects only the filtered items rather than the entire account total.
+func TestGenerateReportFilteredTotals(t *testing.T) {
+	page := &costexplorer.GetCostAndUsageOutput{
+		NextPageToken: nil,
+		ResultsByTime: []cetypes.ResultByTime{
+			{
+				Groups: []cetypes.Group{
+					{
+						Keys: []string{"Amazon DynamoDB"},
+						Metrics: map[string]cetypes.MetricValue{
+							"UnblendedCost": {Amount: aws.String("10.00")},
+							"BlendedCost":   {Amount: aws.String("10.00")},
+							"AmortizedCost": {Amount: aws.String("10.00")},
+						},
+					},
+					{
+						Keys: []string{"AWS Lambda"},
+						Metrics: map[string]cetypes.MetricValue{
+							"UnblendedCost": {Amount: aws.String("5.00")},
+							"BlendedCost":   {Amount: aws.String("5.00")},
+							"AmortizedCost": {Amount: aws.String("5.00")},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	ceMock := &mockCEClient{pages: []*costexplorer.GetCostAndUsageOutput{page}}
+	stsMock := &mockSTSClient{accountID: "123456789012"}
+
+	client := NewClient(ceMock, stsMock)
+	cfg := config.DefaultConfig()
+	cfg.Filters = []string{"Lambda"}
+
+	refTime := time.Date(2026, time.October, 28, 12, 0, 0, 0, time.UTC)
+	report, err := client.GenerateReport(context.Background(), cfg, refTime)
+	if err != nil {
+		t.Fatalf("GenerateReport failed: %v", err)
+	}
+
+	if len(report.Items) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(report.Items))
+	}
+	if report.Totals.UnblendedCost != 5.00 {
+		t.Errorf("expected filtered UnblendedCost 5.00, got %f", report.Totals.UnblendedCost)
+	}
+	if report.Totals.BlendedCost != 5.00 {
+		t.Errorf("expected filtered BlendedCost 5.00, got %f", report.Totals.BlendedCost)
+	}
+	if report.Totals.AmortizedCost != 5.00 {
+		t.Errorf("expected filtered AmortizedCost 5.00, got %f", report.Totals.AmortizedCost)
+	}
+}
+
 func TestGenerateMockReport(t *testing.T) {
 	cfg := config.DefaultConfig()
 	cfg.MockMode = true
@@ -174,6 +284,9 @@ func TestFilterByName(t *testing.T) {
 	}
 	if report.Items[1].Name != "Amazon Cognito" {
 		t.Errorf("expected Amazon Cognito, got %s", report.Items[1].Name)
+	}
+	if report.Totals.UnblendedCost != 9.68 {
+		t.Errorf("expected filtered mock total 9.68, got %f", report.Totals.UnblendedCost)
 	}
 }
 
