@@ -391,6 +391,17 @@ aws-cost-report generate --mtd
 # Compare current MTD spend against the same day window last month:
 aws-cost-report generate --mtd --compare</code></pre>
 
+      <h3>Daily Spend Granularity</h3>
+      <p>Analyze day-by-day spending patterns across your billing window with daily totals, day-of-week context, daily averages, and the top cost driver for each day:</p>
+      <pre><code># Query daily spend breakdown for current month:
+aws-cost-report generate --daily
+
+# Combine daily granularity with Month-to-Date (MTD) tracking:
+aws-cost-report generate --daily --mtd
+
+# Export daily breakdown to CSV:
+aws-cost-report generate --daily --format=csv -o daily-spend.csv</code></pre>
+
       <h3>Prometheus Metrics Exporter</h3>
       <p>Scrape real-time AWS cost metrics in standard Prometheus exposition format (version 0.0.4) for Grafana dashboards:</p>
       <pre><code># Start HTTP microservice daemon:

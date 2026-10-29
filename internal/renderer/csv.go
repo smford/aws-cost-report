@@ -15,6 +15,9 @@ func RenderCSV(w io.Writer, r *awsclient.CostReport) error {
 	if r.MonthlyBreakdown != nil && len(r.MonthlyBreakdown.Months) > 1 {
 		return renderMonthlyCSV(w, r)
 	}
+	if r.DailyBreakdown != nil && len(r.DailyBreakdown.Days) > 0 {
+		return renderDailyCSV(w, r)
+	}
 
 	writer := csv.NewWriter(w)
 	defer writer.Flush()
@@ -143,4 +146,29 @@ func renderMonthlyCSV(w io.Writer, r *awsclient.CostReport) error {
 	}
 	totalRecord = append(totalRecord, fmt.Sprintf("%.2f", mb.GrandTotal), fmt.Sprintf("%.2f", avgMonthly), r.Metadata.Currency)
 	return writer.Write(totalRecord)
+}
+
+func renderDailyCSV(w io.Writer, r *awsclient.CostReport) error {
+	writer := csv.NewWriter(w)
+	defer writer.Flush()
+
+	headers := []string{"Date", "Day", "Spend", "TopDriver", "TopDriverAmount", "Currency"}
+	if err := writer.Write(headers); err != nil {
+		return err
+	}
+
+	for _, d := range r.DailyBreakdown.Days {
+		record := []string{
+			d.Date,
+			d.DayOfWeek,
+			fmt.Sprintf("%.2f", d.Total),
+			d.TopDriverName,
+			fmt.Sprintf("%.2f", d.TopDriverAmount),
+			r.Metadata.Currency,
+		}
+		if err := writer.Write(record); err != nil {
+			return err
+		}
+	}
+	return nil
 }

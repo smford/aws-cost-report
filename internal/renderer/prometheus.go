@@ -104,6 +104,15 @@ func RenderPrometheus(w io.Writer, r *awsclient.CostReport, threshold float64, v
 		sb.WriteString(fmt.Sprintf("aws_cost_report_forecast_threshold_breached{%s} %d\n", labels, forecastBreach))
 	}
 
+	if r.DailyBreakdown != nil {
+		sb.WriteString("# HELP aws_cost_report_daily_spend_dollars Daily spend breakdown over billing period\n")
+		sb.WriteString("# TYPE aws_cost_report_daily_spend_dollars gauge\n")
+		for _, day := range r.DailyBreakdown.Days {
+			dayLabels := fmt.Sprintf("%s,date=\"%s\",day=\"%s\"", labels, day.Date, day.DayOfWeek)
+			sb.WriteString(fmt.Sprintf("aws_cost_report_daily_spend_dollars{%s} %.2f\n", dayLabels, day.Total))
+		}
+	}
+
 	// Service/Item breakdown metrics
 	sb.WriteString("# HELP aws_cost_report_service_unblended_dollars Unblended cost breakdown by service or dimension\n")
 	sb.WriteString("# TYPE aws_cost_report_service_unblended_dollars gauge\n")

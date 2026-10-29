@@ -61,6 +61,7 @@ jobs:
 | `teams-webhook` | Incoming Microsoft Teams webhook URL for automated ChatOps | `""` |
 | `write-summary` | Write report to `$GITHUB_STEP_SUMMARY` | `true` |
 | `monthly` | Render multi-month historical breakdown in column format | `false` |
+| `daily` | Query daily spend granularity over the billing period | `false` |
 | `forecast` | Query AWS Cost Explorer projected month-end spend forecast and guardrail | `false` |
 | `mock` | Run offline with synthetic dataset | `false` |
 | `output-file` | Optional path to save output file or `s3://` URI | `""` |
@@ -190,6 +191,23 @@ aws-cost-report generate --mtd
 
 # Compare current MTD spend against the same day window last month
 aws-cost-report generate --mtd --compare
+```
+
+---
+
+## Daily Spend Granularity (`--daily`)
+
+Analyze day-by-day spending patterns across your billing window with daily totals, day-of-week context, daily averages, and the top cost driver for each day:
+
+```bash
+# Query daily spend breakdown for current month:
+aws-cost-report generate --daily
+
+# Combine daily granularity with Month-to-Date (MTD) tracking:
+aws-cost-report generate --daily --mtd
+
+# Export daily breakdown to CSV:
+aws-cost-report generate --daily --format=csv -o daily-spend.csv
 ```
 
 ---

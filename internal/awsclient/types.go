@@ -77,6 +77,32 @@ type MonthlyBreakdown struct {
 	GrandTotal float64            `json:"grand_total"`
 }
 
+// DailyBucket represents a single day in a daily breakdown.
+type DailyBucket struct {
+	Date            string  `json:"date"` // "YYYY-MM-DD"
+	DayOfWeek       string  `json:"day"`  // "Mon", "Tue", etc.
+	Total           float64 `json:"total"`
+	TopDriverName   string  `json:"top_driver_name,omitempty"`
+	TopDriverAmount float64 `json:"top_driver_amount,omitempty"`
+}
+
+// DailyLineItem represents a service's cost breakdown across queried days.
+type DailyLineItem struct {
+	Name    string             `json:"name"`
+	Costs   map[string]float64 `json:"costs"` // map[date]cost
+	Total   float64            `json:"total"`
+	Average float64            `json:"average"`
+}
+
+// DailyBreakdown contains the tabular daily breakdown over the billing window.
+type DailyBreakdown struct {
+	Days       []DailyBucket      `json:"days"`
+	Items      []DailyLineItem    `json:"items"`
+	Totals     map[string]float64 `json:"totals"` // map[date]total
+	GrandTotal float64            `json:"grand_total"`
+	Average    float64            `json:"average"`
+}
+
 // CostForecast holds month-end forecast data from AWS Cost Explorer.
 type CostForecast struct {
 	TotalAmount        float64 `json:"total_amount"`
@@ -94,6 +120,7 @@ type CostReport struct {
 	Items            []LineItem        `json:"items"`
 	HasComparison    bool              `json:"has_comparison"`
 	MonthlyBreakdown *MonthlyBreakdown `json:"monthly_breakdown,omitempty"`
+	DailyBreakdown   *DailyBreakdown   `json:"daily_breakdown,omitempty"`
 	Forecast         *CostForecast     `json:"forecast,omitempty"`
 }
 

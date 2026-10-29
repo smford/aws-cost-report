@@ -1036,3 +1036,35 @@ func TestForecastInReport(t *testing.T) {
 		t.Errorf("expected ThresholdBreached true")
 	}
 }
+
+func TestDailyMockReport(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.Daily = true
+	refTime := time.Date(2026, time.October, 29, 12, 0, 0, 0, time.UTC)
+
+	report, err := GenerateMockReport(cfg, refTime)
+	if err != nil {
+		t.Fatalf("GenerateMockReport failed: %v", err)
+	}
+
+	if report.DailyBreakdown == nil {
+		t.Fatalf("expected DailyBreakdown to be populated")
+	}
+	if len(report.DailyBreakdown.Days) == 0 {
+		t.Fatalf("expected at least 1 day in DailyBreakdown")
+	}
+	if report.DailyBreakdown.GrandTotal <= 0 {
+		t.Errorf("expected GrandTotal > 0, got %f", report.DailyBreakdown.GrandTotal)
+	}
+	if report.DailyBreakdown.Average <= 0 {
+		t.Errorf("expected Average > 0, got %f", report.DailyBreakdown.Average)
+	}
+
+	firstDay := report.DailyBreakdown.Days[0]
+	if firstDay.Date == "" || firstDay.DayOfWeek == "" {
+		t.Errorf("expected valid Date and DayOfWeek, got %+v", firstDay)
+	}
+	if firstDay.TopDriverName == "" {
+		t.Errorf("expected TopDriverName to be populated, got %+v", firstDay)
+	}
+}

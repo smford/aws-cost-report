@@ -440,3 +440,57 @@ func TestRenderForecast(t *testing.T) {
 		t.Errorf("expected aws_cost_report_forecast_threshold_breached in prom output")
 	}
 }
+
+func TestRenderDailyBreakdown(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.Daily = true
+
+	refTime := time.Date(2026, time.October, 29, 12, 0, 0, 0, time.UTC)
+	report, err := awsclient.GenerateMockReport(cfg, refTime)
+	if err != nil {
+		t.Fatalf("GenerateMockReport failed: %v", err)
+	}
+
+	// 1. Table
+	var tableBuf bytes.Buffer
+	if err := RenderTable(&tableBuf, report, false); err != nil {
+		t.Fatalf("RenderTable failed: %v", err)
+	}
+	tableOut := tableBuf.String()
+	if !strings.Contains(tableOut, "DAILY SPEND BREAKDOWN") {
+		t.Errorf("expected daily breakdown table in output, got:\n%s", tableOut)
+	}
+	if !strings.Contains(tableOut, "Daily Average:") {
+		t.Errorf("expected Daily Average in table output, got:\n%s", tableOut)
+	}
+
+	// 2. Markdown
+	var mdBuf bytes.Buffer
+	if err := RenderMarkdown(&mdBuf, report, false, 0); err != nil {
+		t.Fatalf("RenderMarkdown failed: %v", err)
+	}
+	mdOut := mdBuf.String()
+	if !strings.Contains(mdOut, "### 📅 Daily Spend Breakdown") {
+		t.Errorf("expected daily breakdown markdown heading, got:\n%s", mdOut)
+	}
+
+	// 3. CSV
+	var csvBuf bytes.Buffer
+	if err := RenderCSV(&csvBuf, report); err != nil {
+		t.Fatalf("RenderCSV failed: %v", err)
+	}
+	csvOut := csvBuf.String()
+	if !strings.Contains(csvOut, "Date,Day,Spend,TopDriver,TopDriverAmount,Currency") {
+		t.Errorf("expected daily CSV headers, got:\n%s", csvOut)
+	}
+
+	// 4. Prometheus
+	var promBuf bytes.Buffer
+	if err := RenderPrometheus(&promBuf, report, 0, "v1", "test", "today"); err != nil {
+		t.Fatalf("RenderPrometheus failed: %v", err)
+	}
+	promOut := promBuf.String()
+	if !strings.Contains(promOut, "aws_cost_report_daily_spend_dollars") {
+		t.Errorf("expected aws_cost_report_daily_spend_dollars in prom output")
+	}
+}

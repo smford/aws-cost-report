@@ -145,6 +145,8 @@ type Config struct {
 	Monthly          bool              `yaml:"monthly"`
 	MTD              bool              `yaml:"mtd"`
 	Forecast         bool              `yaml:"forecast"`
+	Daily            bool              `yaml:"daily"`
+	Granularity      string            `yaml:"granularity"`
 
 	// Runtime options resolved from CLI flags or env
 	ConfigFile            string       `yaml:"-"`
@@ -280,6 +282,8 @@ func LoadConfig(args []string) (*Config, error) {
 		mtdFlag      = fs.Bool("mtd", false, "Query Month-to-Date spend from the 1st of the current month up to today")
 		currMonthFlg = fs.Bool("current-month", false, "Alias for --mtd")
 		forecastFlag = fs.Bool("forecast", false, "Query AWS Cost Explorer projected month-end spend forecast and guardrail")
+		dailyFlag    = fs.Bool("daily", false, "Query daily spend granularity over the billing period")
+		granFlag     = fs.String("granularity", "", "Spend granularity: MONTHLY (default) or DAILY")
 		servicesFlag = fs.Bool("services", false, "List official AWS Cost Explorer service names")
 		listServFlag = fs.Bool("list-services", false, "Alias for --services")
 	)
@@ -470,6 +474,11 @@ func LoadConfig(args []string) (*Config, error) {
 
 	if *forecastFlag {
 		cfg.Forecast = true
+	}
+
+	if *dailyFlag || strings.EqualFold(*granFlag, "DAILY") {
+		cfg.Daily = true
+		cfg.Granularity = "DAILY"
 	}
 
 	if cfg.Monthly && cfg.MonthsBack <= 1 && *months == 0 {

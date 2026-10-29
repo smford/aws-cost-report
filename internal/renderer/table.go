@@ -155,6 +155,23 @@ func RenderTable(w io.Writer, r *awsclient.CostReport, noColor bool) error {
 		b.WriteString(divDouble + "\n")
 	}
 
+	if r.DailyBreakdown != nil && len(r.DailyBreakdown.Days) > 0 {
+		b.WriteString("\n📅 DAILY SPEND BREAKDOWN\n")
+		b.WriteString(divSingle + "\n")
+		b.WriteString(fmt.Sprintf(" %-12s | %-4s | %14s | %s\n", "Date", "Day", "Spend ("+r.Metadata.Currency+")", "Top Cost Driver"))
+		b.WriteString(divSingle + "\n")
+		for _, day := range r.DailyBreakdown.Days {
+			topDriverStr := "-"
+			if day.TopDriverName != "" {
+				topDriverStr = fmt.Sprintf("%s (%s%.2f)", day.TopDriverName, sym, day.TopDriverAmount)
+			}
+			b.WriteString(fmt.Sprintf(" %-12s | %-4s | %14.2f | %s\n", day.Date, day.DayOfWeek, day.Total, topDriverStr))
+		}
+		b.WriteString(divSingle + "\n")
+		b.WriteString(fmt.Sprintf(" %-19s | %14.2f | Daily Average: %s%.2f / day\n", fmt.Sprintf("Total (%d days)", len(r.DailyBreakdown.Days)), r.DailyBreakdown.GrandTotal, sym, r.DailyBreakdown.Average))
+		b.WriteString(divDouble + "\n")
+	}
+
 	_, err := io.WriteString(w, b.String())
 	return err
 }

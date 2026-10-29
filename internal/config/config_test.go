@@ -471,3 +471,23 @@ func TestConfigNetMetrics(t *testing.T) {
 		t.Errorf("expected 5 metrics for 'all', got %d: %+v", len(cfg3.Defaults.Metrics), cfg3.Defaults.Metrics)
 	}
 }
+
+func TestConfigDaily(t *testing.T) {
+	// 1. --daily flag
+	cfg1, err := LoadConfig([]string{"--daily"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !cfg1.Daily || cfg1.Granularity != "DAILY" {
+		t.Errorf("expected Daily=true and Granularity=DAILY, got Daily=%v, Granularity=%s", cfg1.Daily, cfg1.Granularity)
+	}
+
+	// 2. --granularity=DAILY flag
+	cfg2, err := LoadConfig([]string{"--granularity", "DAILY"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !cfg2.Daily || cfg2.Granularity != "DAILY" {
+		t.Errorf("expected Daily=true and Granularity=DAILY, got Daily=%v, Granularity=%s", cfg2.Daily, cfg2.Granularity)
+	}
+}

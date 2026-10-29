@@ -131,6 +131,20 @@ func RenderMarkdown(w io.Writer, r *awsclient.CostReport, writeJobSummary bool, 
 		b.WriteString(fmt.Sprintf("| Guardrail Status | %s |\n", statusBadge))
 	}
 
+	if r.DailyBreakdown != nil && len(r.DailyBreakdown.Days) > 0 {
+		b.WriteString("\n### 📅 Daily Spend Breakdown\n\n")
+		b.WriteString(fmt.Sprintf("| Date | Day | Spend (%s) | Top Cost Driver |\n", r.Metadata.Currency))
+		b.WriteString("|:---|:---:|---:|:---|\n")
+		for _, day := range r.DailyBreakdown.Days {
+			topDriverStr := "-"
+			if day.TopDriverName != "" {
+				topDriverStr = fmt.Sprintf("%s (%s%.2f)", day.TopDriverName, sym, day.TopDriverAmount)
+			}
+			b.WriteString(fmt.Sprintf("| `%s` | %s | %s%.2f | %s |\n", day.Date, day.DayOfWeek, sym, day.Total, topDriverStr))
+		}
+		b.WriteString(fmt.Sprintf("\n**Total (%d days):** %s%.2f &nbsp;•&nbsp; **Daily Average:** %s%.2f / day\n", len(r.DailyBreakdown.Days), sym, r.DailyBreakdown.GrandTotal, sym, r.DailyBreakdown.Average))
+	}
+
 	b.WriteString("\n> _Generated automatically by [aws-cost-report](https://github.com/smford/aws-cost-report)_\n")
 
 	mdContent := b.String()

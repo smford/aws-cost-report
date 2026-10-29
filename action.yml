@@ -118,6 +118,10 @@ inputs:
     description: 'Query AWS Cost Explorer projected month-end spend forecast and guardrail (true/false)'
     required: false
     default: 'false'
+  daily:
+    description: 'Query daily spend granularity over the billing period (true/false)'
+    required: false
+    default: 'false'
 
 outputs:
   report:
@@ -336,6 +340,10 @@ runs:
 
         if [ "${{ inputs.forecast }}" = "true" ]; then
           ARGS+=("--forecast")
+        fi
+
+        if [ "${{ inputs.daily }}" = "true" ]; then
+          ARGS+=("--daily")
         fi
 
         REPORT_TMP="${RUNNER_TEMP:-/tmp}/aws-cost-report-output.txt"

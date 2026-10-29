@@ -31,6 +31,7 @@ A production-grade, zero-dependency (outside official AWS SDK v2 and YAML parser
 - **Month-over-Month (MoM) Delta**: Computes absolute dollar difference ($) and percentage changes (% Δ) against preceding billing periods with ANSI colorized delta indicators (green for reductions, red for increases).
 - **Multi-Month Column Breakdown (`--monthly` / `--trend`)**: View up to 12+ historical months side-by-side in multi-column format (each month has its own column, plus total), in terminal tables, Markdown, CSV, and JSON.
 - **Month-to-Date Tracking (`--mtd` / `--current-month`)**: Query real-time in-progress spend from the 1st of the current month up to today with automatic MoM comparison against the same date window last month.
+- **Daily Spend Granularity (`--daily` / `--granularity=DAILY`)**: Track day-by-day cost progression across billing cycles with daily totals, day-of-week context, and top spending services per day.
 - **Multi-Dimension Grouping**: Group by AWS `SERVICE`, `LINKED_ACCOUNT`, or custom Cost Allocation Tags (`TAG:Environment`, `TAG:Project`, etc.).
 - **SRE Budget Guardrails (`--fail-on-threshold` / `--threshold`)**: Blocks CI/CD pipelines by terminating with exit code `1` if total billing exceeds a configured dollar threshold.
 - **Predictive Forecast Guardrail (`--forecast`)**: Uses AWS Cost Explorer machine learning (`GetCostForecast`) to project month-end spend and warn or fail pipelines before overruns occur.
@@ -331,21 +332,35 @@ aws-cost-report generate --mtd --compare
 
 When `--compare` is combined with `--mtd`, the previous period automatically matches the identical day-of-month window from the preceding month (e.g. October 1–29 vs. September 1–29).
 
-### 11. Top N Cost Drivers
+### 11. Daily Spend Breakdown (`--daily` / `--granularity=DAILY`)
+Analyze day-by-day spending patterns across your billing window with daily totals, day-of-week context, daily averages, and the top cost driver for each day:
+
+```bash
+# Query daily spend breakdown for current month:
+aws-cost-report generate --daily
+
+# Combine daily granularity with Month-to-Date (MTD) tracking:
+aws-cost-report generate --daily --mtd
+
+# Export daily breakdown to CSV:
+aws-cost-report generate --daily --format=csv -o daily-spend.csv
+```
+
+### 12. Top N Cost Drivers
 Highlight the largest cost drivers and consolidate all smaller workloads into `"Other Services"`:
 
 ```bash
 aws-cost-report generate --compare --top=5
 ```
 
-### 12. Explicit Date Range
+### 13. Explicit Date Range
 Query custom date intervals (for custom ranges, comparison periods match the exact duration in days):
 
 ```bash
 aws-cost-report generate --start=2026-08-01 --end=2026-09-30
 ```
 
-### 13. SRE Budget Guardrail & Predictive Forecast (CI/CD Quality Gate)
+### 14. SRE Budget Guardrail & Predictive Forecast (CI/CD Quality Gate)
 Exit with status code `1` if total unblended cost exceeds threshold, or enable `--forecast` to alert when projected month-end spend is on track to breach your budget:
 
 ```bash
@@ -357,7 +372,7 @@ echo $? # Returns 1 if total cost > $50.00, or 0 if within budget
 aws-cost-report generate --forecast --threshold=50.00
 ```
 
-### 14. Export to JSON or CSV
+### 15. Export to JSON or CSV
 
 ```bash
 # JSON output for jq or downstream processing
@@ -367,7 +382,7 @@ aws-cost-report generate --format=json > monthly-costs.json
 aws-cost-report generate --format=csv > monthly-costs.csv
 ```
 
-### 15. Multi-Currency Support (Auto-Detected & Configurable)
+### 16. Multi-Currency Support (Auto-Detected & Configurable)
 `aws-cost-report` automatically detects your AWS account's billing currency (`EUR`, `GBP`, `JPY`, `AUD`, `CAD`, `USD`, etc.) from the AWS Cost Explorer API response and dynamically renders the corresponding symbols (`€`, `£`, `¥`, `A$`, `CA$`, `$`) and headers (`Diff (€)`, `Delta (£)`).
 
 You can also explicitly set or override the currency:
@@ -380,7 +395,7 @@ aws-cost-report generate --currency=EUR
 aws-cost-report generate --currency=GBP --compare
 ```
 
-### 16. Shell Autocompletion (`completion`)
+### 17. Shell Autocompletion (`completion`)
 Generate command and flag autocompletion scripts for your shell:
 
 ```bash
@@ -394,7 +409,7 @@ source <(aws-cost-report completion zsh)
 aws-cost-report completion fish | source
 ```
 
-### 17. Save Reports Directly to Amazon S3
+### 18. Save Reports Directly to Amazon S3
 Export reports and JSON summaries straight to Amazon S3 buckets using `s3://` URIs or the dedicated `--s3-bucket` and `--s3-key` flags:
 
 ```bash
@@ -410,7 +425,7 @@ aws-cost-report generate --compare \
 aws-cost-report generate --output="report.csv" --format=csv --s3-bucket="my-billing-reports" --s3-key="csv/2026-10.csv"
 ```
 
-### 18. Enterprise Discount Program (EDP) & Net Cost Metrics
+### 19. Enterprise Discount Program (EDP) & Net Cost Metrics
 For AWS accounts with negotiated Enterprise Discount Programs (EDP) or private pricing agreements, `aws-cost-report` supports AWS Cost Explorer net metrics (`NetUnblendedCost` and `NetAmortizedCost`):
 
 ```bash
@@ -487,6 +502,7 @@ jobs:
 | `currency` | Override currency code and symbol (e.g. `USD`, `EUR`, `GBP`). Auto-detected from AWS by default. | `""` | No |
 | `monthly` | Render multi-month historical breakdown in column format (`true`/`false`) | `false` | No |
 | `mtd` | Query Month-to-Date spend from 1st of month up to today (`true`/`false`) | `false` | No |
+| `daily` | Query daily spend granularity over the billing period (`true`/`false`) | `false` | No |
 | `forecast` | Query AWS Cost Explorer projected month-end spend forecast and guardrail (`true`/`false`) | `false` | No |
 | `output-file` | Optional path to save the formatted report to disk or `s3://` URI | `""` | No |
 | `s3-bucket` | Target S3 bucket name for saving report output | `""` | No |
@@ -688,6 +704,8 @@ To run `aws-cost-report`, the executing IAM principal requires read permissions 
 |:---|:---|:---|:---|
 | `--compare` | | `false` | Enable Month-over-Month (MoM) comparison against preceding billing period |
 | `--mtd` | `--current-month` | `false` | Query Month-to-Date spend from the 1st of the current month up to today |
+| `--daily` | | `false` | Query daily spend granularity over the billing period |
+| `--granularity` | | `MONTHLY` | Spend granularity: `MONTHLY` (default) or `DAILY` |
 | `--forecast` | | `false` | Query AWS Cost Explorer machine learning forecast for projected month-end spend |
 | `--monthly` | `--trend` | `false` | Display multi-month historical breakdown with each month as a separate column (default: 12 months) |
 | `--format` | | `table` | Output format: `table`, `markdown`, `json`, `csv`, `prometheus` |

@@ -35,9 +35,13 @@ _aws_cost_report() {
     _init_completion || return
 
     local commands="generate services server completion version help"
-    local flags="--compare --mtd --current-month --forecast --monthly --trend --format --months --start --end --metrics --group-by --name --account-name --filter --service --tag --tag-filter --threshold --fail-on-threshold --top --min-cost --slack-webhook --teams-webhook --s3-bucket --s3-key --currency --no-color --mock --config -c --output -o --json-summary --write-summary --version -v --help -h"
+    local flags="--compare --mtd --current-month --daily --granularity --forecast --monthly --trend --format --months --start --end --metrics --group-by --name --account-name --filter --service --tag --tag-filter --threshold --fail-on-threshold --top --min-cost --slack-webhook --teams-webhook --s3-bucket --s3-key --currency --no-color --mock --config -c --output -o --json-summary --write-summary --version -v --help -h"
 
     case "${prev}" in
+        --granularity)
+            COMPREPLY=( $(compgen -W "MONTHLY DAILY" -- "${cur}") )
+            return 0
+            ;;
         --format)
             COMPREPLY=( $(compgen -W "table markdown json csv prometheus" -- "${cur}") )
             return 0
@@ -109,6 +113,8 @@ _aws_cost_report() {
                         '--compare[Compare Month-over-Month with preceding billing period]' \
                         '--mtd[Query Month-to-Date spend from the 1st of current month up to today]' \
                         '--current-month[Alias for --mtd]' \
+                        '--daily[Query daily spend granularity over the billing period]' \
+                        '--granularity[Spend granularity]:granularity:(MONTHLY DAILY)' \
                         '--forecast[Query AWS Cost Explorer projected month-end spend forecast and guardrail]' \
                         '--monthly[Display multi-month historical breakdown with each month as a separate column]' \
                         '--trend[Alias for --monthly]' \
@@ -171,6 +177,8 @@ complete -c aws-cost-report -n "__fish_seen_subcommand_from completion" -a "bash
 complete -c aws-cost-report -l compare -d "Compare Month-over-Month with preceding billing period"
 complete -c aws-cost-report -l mtd -d "Query Month-to-Date spend up to today"
 complete -c aws-cost-report -l current-month -d "Alias for --mtd"
+complete -c aws-cost-report -l daily -d "Query daily spend granularity over the billing period"
+complete -c aws-cost-report -l granularity -x -a "MONTHLY DAILY" -d "Spend granularity"
 complete -c aws-cost-report -l forecast -d "Query AWS Cost Explorer projected month-end spend forecast and guardrail"
 complete -c aws-cost-report -l monthly -d "Display multi-month historical breakdown in column format"
 complete -c aws-cost-report -l trend -d "Alias for --monthly"

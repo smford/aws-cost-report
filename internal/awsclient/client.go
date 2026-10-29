@@ -138,6 +138,7 @@ func (c *Client) GenerateReport(ctx context.Context, cfg *config.Config, now tim
 		currentTotals    TotalCosts
 		currentItems     []LineItem
 		currentMonthly   *MonthlyBreakdown
+		currentDaily     *DailyBreakdown
 		detectedCurrency string
 		prevTotals       TotalCosts
 		prevItems        []LineItem
@@ -152,12 +153,12 @@ func (c *Client) GenerateReport(ctx context.Context, cfg *config.Config, now tim
 
 		go func() {
 			defer wg.Done()
-			currentTotals, currentItems, currentMonthly, detectedCurrency, errCurr = c.fetchCostData(ctx, cfg, dateRange)
+			currentTotals, currentItems, currentMonthly, currentDaily, detectedCurrency, errCurr = c.fetchCostData(ctx, cfg, dateRange)
 		}()
 
 		go func() {
 			defer wg.Done()
-			prevTotals, prevItems, _, _, errPrev = c.fetchCostData(ctx, cfg, prevDateRange)
+			prevTotals, prevItems, _, _, _, errPrev = c.fetchCostData(ctx, cfg, prevDateRange)
 		}()
 
 		wg.Wait()
@@ -169,7 +170,7 @@ func (c *Client) GenerateReport(ctx context.Context, cfg *config.Config, now tim
 			return nil, fmt.Errorf("failed to fetch comparison period: %w", errPrev)
 		}
 	} else {
-		currentTotals, currentItems, currentMonthly, detectedCurrency, errCurr = c.fetchCostData(ctx, cfg, dateRange)
+		currentTotals, currentItems, currentMonthly, currentDaily, detectedCurrency, errCurr = c.fetchCostData(ctx, cfg, dateRange)
 		if errCurr != nil {
 			return nil, errCurr
 		}
@@ -201,6 +202,7 @@ func (c *Client) GenerateReport(ctx context.Context, cfg *config.Config, now tim
 		Items:            currentItems,
 		HasComparison:    false,
 		MonthlyBreakdown: currentMonthly,
+		DailyBreakdown:   currentDaily,
 	}
 
 	if dateRange.IsEstimated {
@@ -458,10 +460,15 @@ func alignMonthlyBreakdown(mb *MonthlyBreakdown, targetItems []LineItem, groupKe
 }
 
 // fetchCostData executes paginated queries against AWS Cost Explorer.
-func (c *Client) fetchCostData(ctx context.Context, cfg *config.Config, dateRange *DateRange) (TotalCosts, []LineItem, *MonthlyBreakdown, string, error) {
+func (c *Client) fetchCostData(ctx context.Context, cfg *config.Config, dateRange *DateRange) (TotalCosts, []LineItem, *MonthlyBreakdown, *DailyBreakdown, string, error) {
 	timePeriod := &cetypes.DateInterval{
 		Start: aws.String(dateRange.Start.Format(DateFormat)),
 		End:   aws.String(dateRange.EndExclusiveAWS.Format(DateFormat)),
+	}
+
+	granularity := cetypes.GranularityMonthly
+	if cfg.Daily {
+		granularity = cetypes.GranularityDaily
 	}
 
 	groupings := cfg.Groupings
@@ -496,6 +503,16 @@ func (c *Client) fetchCostData(ctx context.Context, cfg *config.Config, dateRang
 	var detectedCurrency string
 	itemsMap := make(map[string]*LineItem)
 	var nextPageToken *string
+
+	type topDriverInfo struct {
+		name   string
+		amount float64
+	}
+	dayKeysMap := make(map[string]bool)
+	var dayKeys []string
+	dayTotalsMap := make(map[string]float64)
+	dayTopDriver := make(map[string]topDriverInfo)
+	dayItemCosts := make(map[string]map[string]float64)
 
 	monthKeysMap := make(map[string]bool)
 	var monthKeys []string
@@ -538,7 +555,7 @@ func (c *Client) fetchCostData(ctx context.Context, cfg *config.Config, dateRang
 	for {
 		input := &costexplorer.GetCostAndUsageInput{
 			TimePeriod:    timePeriod,
-			Granularity:   cetypes.GranularityMonthly,
+			Granularity:   granularity,
 			Metrics:       cfg.Defaults.Metrics,
 			GroupBy:       groupBy,
 			Filter:        filterExpr,
@@ -547,11 +564,12 @@ func (c *Client) fetchCostData(ctx context.Context, cfg *config.Config, dateRang
 
 		output, err := c.getCostAndUsageWithRetry(ctx, input)
 		if err != nil {
-			return totals, nil, nil, "", fmt.Errorf("AWS Cost Explorer GetCostAndUsage failed: %w", err)
+			return totals, nil, nil, nil, "", fmt.Errorf("AWS Cost Explorer GetCostAndUsage failed: %w", err)
 		}
 
 		for _, result := range output.ResultsByTime {
 			var mKey string
+			var dKey string
 			if result.TimePeriod != nil && result.TimePeriod.Start != nil {
 				if pt, err := time.Parse(DateFormat, *result.TimePeriod.Start); err == nil {
 					mKey = pt.Format("2006-01")
@@ -561,6 +579,13 @@ func (c *Client) fetchCostData(ctx context.Context, cfg *config.Config, dateRang
 						monthInfoMap[mKey] = monthInfo{
 							label:     pt.Format("Jan 06"),
 							fullLabel: pt.Format("January 2006"),
+						}
+					}
+					if cfg.Daily {
+						dKey = pt.Format(DateFormat)
+						if !dayKeysMap[dKey] {
+							dayKeysMap[dKey] = true
+							dayKeys = append(dayKeys, dKey)
 						}
 					}
 				}
@@ -630,6 +655,17 @@ func (c *Client) fetchCostData(ctx context.Context, cfg *config.Config, dateRang
 					}
 					itemMonthlyCosts[name][mKey] += uCost
 					monthTotalsMap[mKey] += uCost
+				}
+
+				if dKey != "" {
+					if dayItemCosts[name] == nil {
+						dayItemCosts[name] = make(map[string]float64)
+					}
+					dayItemCosts[name][dKey] += uCost
+					dayTotalsMap[dKey] += uCost
+					if uCost > dayTopDriver[dKey].amount {
+						dayTopDriver[dKey] = topDriverInfo{name: name, amount: uCost}
+					}
 				}
 			}
 		}
@@ -748,7 +784,43 @@ func (c *Client) fetchCostData(ctx context.Context, cfg *config.Config, dateRang
 		}
 	}
 
-	return totals, items, monthlyBreakdown, detectedCurrency, nil
+	var dailyBreakdown *DailyBreakdown
+	if cfg.Daily && len(dayKeys) > 0 {
+		sort.Strings(dayKeys)
+		var buckets []DailyBucket
+		var grandTotal float64
+
+		for _, dk := range dayKeys {
+			dTotal := roundToTwo(dayTotalsMap[dk])
+			grandTotal += dTotal
+			dayTime, _ := time.Parse(DateFormat, dk)
+			dayOfWeek := dayTime.Format("Mon")
+			topDriver := dayTopDriver[dk]
+
+			buckets = append(buckets, DailyBucket{
+				Date:            dk,
+				DayOfWeek:       dayOfWeek,
+				Total:           dTotal,
+				TopDriverName:   topDriver.name,
+				TopDriverAmount: roundToTwo(topDriver.amount),
+			})
+		}
+
+		grandTotal = roundToTwo(grandTotal)
+		avg := 0.0
+		if len(buckets) > 0 {
+			avg = roundToTwo(grandTotal / float64(len(buckets)))
+		}
+
+		dailyBreakdown = &DailyBreakdown{
+			Days:       buckets,
+			Totals:     dayTotalsMap,
+			GrandTotal: grandTotal,
+			Average:    avg,
+		}
+	}
+
+	return totals, items, monthlyBreakdown, dailyBreakdown, detectedCurrency, nil
 }
 
 // GenerateMockReport generates realistic mock billing data matching specification benchmarks.
@@ -959,6 +1031,42 @@ func GenerateMockReport(cfg *config.Config, now time.Time) (*CostReport, error) 
 			PeriodEnd:          endStr,
 			PredictionInterval: 80,
 			ThresholdBreached:  breached,
+		}
+	}
+
+	if cfg.Daily {
+		var buckets []DailyBucket
+		var grandTotal float64
+		totalsMap := make(map[string]float64)
+
+		cur := dateRange.Start
+		for !cur.After(dateRange.EndInclusive) {
+			dk := cur.Format(DateFormat)
+			dayTotal := 0.72
+			grandTotal += dayTotal
+			totalsMap[dk] = dayTotal
+
+			buckets = append(buckets, DailyBucket{
+				Date:            dk,
+				DayOfWeek:       cur.Format("Mon"),
+				Total:           dayTotal,
+				TopDriverName:   "Amazon DynamoDB",
+				TopDriverAmount: 0.18,
+			})
+			cur = cur.AddDate(0, 0, 1)
+		}
+
+		grandTotal = roundToTwo(grandTotal)
+		avg := 0.0
+		if len(buckets) > 0 {
+			avg = roundToTwo(grandTotal / float64(len(buckets)))
+		}
+
+		report.DailyBreakdown = &DailyBreakdown{
+			Days:       buckets,
+			Totals:     totalsMap,
+			GrandTotal: grandTotal,
+			Average:    avg,
 		}
 	}
 
