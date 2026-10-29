@@ -243,6 +243,109 @@ func TestGenerateReportFilteredTotals(t *testing.T) {
 	}
 }
 
+// TestCurrencyAutoDetectionFromAWS verifies that when AWS Cost Explorer returns a non-USD currency
+// in the MetricValue.Unit field (e.g. EUR), the tool automatically adopts it without manual config.
+func TestCurrencyAutoDetectionFromAWS(t *testing.T) {
+	page := &costexplorer.GetCostAndUsageOutput{
+		NextPageToken: nil,
+		ResultsByTime: []cetypes.ResultByTime{
+			{
+				Groups: []cetypes.Group{
+					{
+						Keys: []string{"Amazon DynamoDB"},
+						Metrics: map[string]cetypes.MetricValue{
+							"UnblendedCost": {Amount: aws.String("10.00"), Unit: aws.String("EUR")},
+							"BlendedCost":   {Amount: aws.String("10.00"), Unit: aws.String("EUR")},
+							"AmortizedCost": {Amount: aws.String("10.00"), Unit: aws.String("EUR")},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	ceMock := &mockCEClient{pages: []*costexplorer.GetCostAndUsageOutput{page}}
+	stsMock := &mockSTSClient{accountID: "123456789012"}
+
+	client := NewClient(ceMock, stsMock)
+	cfg := config.DefaultConfig() // Defaults.Currency is "USD", but CurrencyExplicitlySet is false
+
+	refTime := time.Date(2026, time.October, 28, 12, 0, 0, 0, time.UTC)
+	report, err := client.GenerateReport(context.Background(), cfg, refTime)
+	if err != nil {
+		t.Fatalf("GenerateReport failed: %v", err)
+	}
+
+	if report.Metadata.Currency != "EUR" {
+		t.Errorf("expected auto-detected currency EUR, got %s", report.Metadata.Currency)
+	}
+	if report.Metadata.CurrencySymbol() != "€" {
+		t.Errorf("expected currency symbol €, got %s", report.Metadata.CurrencySymbol())
+	}
+}
+
+// TestCurrencyExplicitOverride verifies that an explicit user override takes precedence over auto-detection.
+func TestCurrencyExplicitOverride(t *testing.T) {
+	page := &costexplorer.GetCostAndUsageOutput{
+		NextPageToken: nil,
+		ResultsByTime: []cetypes.ResultByTime{
+			{
+				Groups: []cetypes.Group{
+					{
+						Keys: []string{"Amazon DynamoDB"},
+						Metrics: map[string]cetypes.MetricValue{
+							"UnblendedCost": {Amount: aws.String("10.00"), Unit: aws.String("EUR")},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	ceMock := &mockCEClient{pages: []*costexplorer.GetCostAndUsageOutput{page}}
+	stsMock := &mockSTSClient{accountID: "123456789012"}
+
+	client := NewClient(ceMock, stsMock)
+	cfg := config.DefaultConfig()
+	cfg.Defaults.Currency = "GBP"
+	cfg.CurrencyExplicitlySet = true
+
+	refTime := time.Date(2026, time.October, 28, 12, 0, 0, 0, time.UTC)
+	report, err := client.GenerateReport(context.Background(), cfg, refTime)
+	if err != nil {
+		t.Fatalf("GenerateReport failed: %v", err)
+	}
+
+	if report.Metadata.Currency != "GBP" {
+		t.Errorf("expected explicit currency GBP, got %s", report.Metadata.Currency)
+	}
+	if report.Metadata.CurrencySymbol() != "£" {
+		t.Errorf("expected currency symbol £, got %s", report.Metadata.CurrencySymbol())
+	}
+}
+
+// TestCurrencySymbolMapping checks standard ISO symbol lookups.
+func TestCurrencySymbolMapping(t *testing.T) {
+	cases := map[string]string{
+		"USD": "$",
+		"EUR": "€",
+		"GBP": "£",
+		"JPY": "¥",
+		"AUD": "A$",
+		"CAD": "CA$",
+		"CHF": "CHF",
+		"BRL": "R$",
+		"SEK": "kr",
+		"XYZ": "XYZ",
+	}
+	for code, expected := range cases {
+		got := CurrencySymbol(code)
+		if got != expected {
+			t.Errorf("CurrencySymbol(%q) = %q; expected %q", code, got, expected)
+		}
+	}
+}
+
 func TestGenerateMockReport(t *testing.T) {
 	cfg := config.DefaultConfig()
 	cfg.MockMode = true

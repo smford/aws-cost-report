@@ -239,6 +239,19 @@ aws-cost-report generate --format=json > monthly-costs.json
 aws-cost-report generate --format=csv > monthly-costs.csv
 ```
 
+### 11. Multi-Currency Support (Auto-Detected & Configurable)
+`aws-cost-report` automatically detects your AWS account's billing currency (`EUR`, `GBP`, `JPY`, `AUD`, `CAD`, `USD`, etc.) from the AWS Cost Explorer API response and dynamically renders the corresponding symbols (`€`, `£`, `¥`, `A$`, `CA$`, `$`) and headers (`Diff (€)`, `Delta (£)`).
+
+You can also explicitly set or override the currency:
+
+```bash
+# Explicitly set currency for reports
+aws-cost-report generate --currency=EUR
+
+# Compare spend in British Pounds
+aws-cost-report generate --currency=GBP --compare
+```
+
 ---
 
 ## GitHub Action
@@ -299,6 +312,7 @@ jobs:
 | `write-summary` | Automatically publish markdown table to `$GITHUB_STEP_SUMMARY` | `true` | No |
 | `mock` | Run with offline deterministic mock data (no AWS API calls) | `false` | No |
 | `config` | Path to custom YAML configuration file | `""` | No |
+| `currency` | Override currency code and symbol (e.g. `USD`, `EUR`, `GBP`). Auto-detected from AWS by default. | `""` | No |
 | `output-file` | Optional path to save the formatted report to disk | `""` | No |
 
 ### Action Outputs

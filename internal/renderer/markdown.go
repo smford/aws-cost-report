@@ -13,12 +13,14 @@ import (
 // RenderMarkdown generates a GitHub-Flavored Markdown report and optionally writes to $GITHUB_STEP_SUMMARY.
 func RenderMarkdown(w io.Writer, r *awsclient.CostReport, writeJobSummary bool, failOnThreshold float64) error {
 	var b strings.Builder
+	sym := r.Metadata.CurrencySymbol()
+	deltaHeader := fmt.Sprintf("Delta (%s)", sym)
 
 	b.WriteString("# 📊 AWS Monthly Billing & Usage Report\n\n")
 
 	if failOnThreshold > 0.00 && r.Totals.UnblendedCost > failOnThreshold {
-		b.WriteString(fmt.Sprintf("> [!CAUTION]\n> **Budget Guardrail Alert**: Total billing of **$%.2f %s** exceeds the configured threshold of **$%.2f %s**!\n\n",
-			r.Totals.UnblendedCost, r.Metadata.Currency, failOnThreshold, r.Metadata.Currency))
+		b.WriteString(fmt.Sprintf("> [!CAUTION]\n> **Budget Guardrail Alert**: Total billing of **%s%.2f %s** exceeds the configured threshold of **%s%.2f %s**!\n\n",
+			sym, r.Totals.UnblendedCost, r.Metadata.Currency, sym, failOnThreshold, r.Metadata.Currency))
 	}
 
 	// Metadata Table
@@ -38,22 +40,22 @@ func RenderMarkdown(w io.Writer, r *awsclient.CostReport, writeJobSummary bool, 
 	// Total Metrics Table
 	b.WriteString("### 💰 Overall Cost Summary\n\n")
 	if r.HasComparison {
-		b.WriteString("| Metric | Amount (" + r.Metadata.Currency + ") | Previous (" + r.Metadata.Currency + ") | Delta ($) | Change (%) |\n")
+		b.WriteString("| Metric | Amount (" + r.Metadata.Currency + ") | Previous (" + r.Metadata.Currency + ") | " + deltaHeader + " | Change (%) |\n")
 		b.WriteString("|:---|---:|---:|---:|---:|\n")
-		b.WriteString(fmt.Sprintf("| **Unblended Cost** | **$%.2f** | $%.2f | %s | %s |\n",
-			r.Totals.UnblendedCost, r.Totals.PrevUnblendedCost, formatCurrencyDelta(r.Totals.MoMDeltaAmount), formatPercentDelta(r.Totals.MoMDeltaPercent)))
+		b.WriteString(fmt.Sprintf("| **Unblended Cost** | **%s%.2f** | %s%.2f | %s | %s |\n",
+			sym, r.Totals.UnblendedCost, sym, r.Totals.PrevUnblendedCost, formatCurrencyDelta(r.Totals.MoMDeltaAmount, sym), formatPercentDelta(r.Totals.MoMDeltaPercent)))
 		blendedDelta := r.Totals.BlendedCost - r.Totals.PrevBlendedCost
-		b.WriteString(fmt.Sprintf("| **Blended Cost** | **$%.2f** | $%.2f | %s | %s |\n",
-			r.Totals.BlendedCost, r.Totals.PrevBlendedCost, formatCurrencyDelta(blendedDelta), formatPercentDelta(calcPercent(r.Totals.BlendedCost, r.Totals.PrevBlendedCost))))
+		b.WriteString(fmt.Sprintf("| **Blended Cost** | **%s%.2f** | %s%.2f | %s | %s |\n",
+			sym, r.Totals.BlendedCost, sym, r.Totals.PrevBlendedCost, formatCurrencyDelta(blendedDelta, sym), formatPercentDelta(calcPercent(r.Totals.BlendedCost, r.Totals.PrevBlendedCost))))
 		amortDelta := r.Totals.AmortizedCost - r.Totals.PrevAmortizedCost
-		b.WriteString(fmt.Sprintf("| **Amortized Cost** | **$%.2f** | $%.2f | %s | %s |\n\n",
-			r.Totals.AmortizedCost, r.Totals.PrevAmortizedCost, formatCurrencyDelta(amortDelta), formatPercentDelta(calcPercent(r.Totals.AmortizedCost, r.Totals.PrevAmortizedCost))))
+		b.WriteString(fmt.Sprintf("| **Amortized Cost** | **%s%.2f** | %s%.2f | %s | %s |\n\n",
+			sym, r.Totals.AmortizedCost, sym, r.Totals.PrevAmortizedCost, formatCurrencyDelta(amortDelta, sym), formatPercentDelta(calcPercent(r.Totals.AmortizedCost, r.Totals.PrevAmortizedCost))))
 	} else {
 		b.WriteString("| Metric | Amount (" + r.Metadata.Currency + ") |\n")
 		b.WriteString("|:---|---:|\n")
-		b.WriteString(fmt.Sprintf("| **Blended Cost** | $%.2f |\n", r.Totals.BlendedCost))
-		b.WriteString(fmt.Sprintf("| **Unblended Cost** | $%.2f |\n", r.Totals.UnblendedCost))
-		b.WriteString(fmt.Sprintf("| **Amortized Cost** | $%.2f |\n\n", r.Totals.AmortizedCost))
+		b.WriteString(fmt.Sprintf("| **Blended Cost** | %s%.2f |\n", sym, r.Totals.BlendedCost))
+		b.WriteString(fmt.Sprintf("| **Unblended Cost** | %s%.2f |\n", sym, r.Totals.UnblendedCost))
+		b.WriteString(fmt.Sprintf("| **Amortized Cost** | %s%.2f |\n\n", sym, r.Totals.AmortizedCost))
 	}
 
 	// Service/Dimension Breakdown Table
@@ -64,14 +66,16 @@ func RenderMarkdown(w io.Writer, r *awsclient.CostReport, writeJobSummary bool, 
 	b.WriteString(fmt.Sprintf("### 🔍 Itemized Breakdown by %s\n\n", groupLabel))
 
 	if r.HasComparison {
-		b.WriteString(fmt.Sprintf("| %s | Unblended (%s) | Previous (%s) | Delta ($) | Change (%%) |\n", groupLabel, r.Metadata.Currency, r.Metadata.Currency))
+		b.WriteString(fmt.Sprintf("| %s | Unblended (%s) | Previous (%s) | %s | Change (%%) |\n", groupLabel, r.Metadata.Currency, r.Metadata.Currency, deltaHeader))
 		b.WriteString("|:---|---:|---:|---:|---:|\n")
 		for _, item := range r.Items {
-			b.WriteString(fmt.Sprintf("| %s | $%.2f | $%.2f | %s | %s |\n",
+			b.WriteString(fmt.Sprintf("| %s | %s%.2f | %s%.2f | %s | %s |\n",
 				item.Name,
+				sym,
 				item.UnblendedCost,
+				sym,
 				item.PrevUnblendedCost,
-				formatCurrencyDelta(item.MoMDeltaAmount),
+				formatCurrencyDelta(item.MoMDeltaAmount, sym),
 				formatPercentDelta(item.MoMDeltaPercent),
 			))
 		}
@@ -79,10 +83,13 @@ func RenderMarkdown(w io.Writer, r *awsclient.CostReport, writeJobSummary bool, 
 		b.WriteString(fmt.Sprintf("| %s | Unblended (%s) | Blended (%s) | Amortized (%s) |\n", groupLabel, r.Metadata.Currency, r.Metadata.Currency, r.Metadata.Currency))
 		b.WriteString("|:---|---:|---:|---:|\n")
 		for _, item := range r.Items {
-			b.WriteString(fmt.Sprintf("| %s | $%.2f | $%.2f | $%.2f |\n",
+			b.WriteString(fmt.Sprintf("| %s | %s%.2f | %s%.2f | %s%.2f |\n",
 				item.Name,
+				sym,
 				item.UnblendedCost,
+				sym,
 				item.BlendedCost,
+				sym,
 				item.AmortizedCost,
 			))
 		}
@@ -109,14 +116,17 @@ func RenderMarkdown(w io.Writer, r *awsclient.CostReport, writeJobSummary bool, 
 	return nil
 }
 
-func formatCurrencyDelta(v float64) string {
+func formatCurrencyDelta(v float64, sym string) string {
+	if sym == "" {
+		sym = "$"
+	}
 	if math.Abs(v) < 0.005 {
-		return "$0.00"
+		return fmt.Sprintf("%s0.00", sym)
 	}
 	if v > 0 {
-		return fmt.Sprintf("+$%.2f", v)
+		return fmt.Sprintf("+%s%.2f", sym, v)
 	}
-	return fmt.Sprintf("-$%.2f", math.Abs(v))
+	return fmt.Sprintf("-%s%.2f", sym, math.Abs(v))
 }
 
 func formatPercentDelta(v float64) string {

@@ -35,9 +35,10 @@ func SendSlackNotification(ctx context.Context, webhookURL string, report *awscl
 		return nil
 	}
 
+	sym := report.Metadata.CurrencySymbol()
 	fallbackTitle := "📊 AWS Monthly Billing & Usage Report"
 	if threshold > 0 && report.Totals.UnblendedCost > threshold {
-		fallbackTitle = fmt.Sprintf("🚨 AWS Budget Alert: Spending ($%.2f) exceeds threshold ($%.2f)!", report.Totals.UnblendedCost, threshold)
+		fallbackTitle = fmt.Sprintf("🚨 AWS Budget Alert: Spending (%s%.2f) exceeds threshold (%s%.2f)!", sym, report.Totals.UnblendedCost, sym, threshold)
 	}
 
 	blocks := []SlackBlock{
@@ -51,7 +52,7 @@ func SendSlackNotification(ctx context.Context, webhookURL string, report *awscl
 				{Type: "mrkdwn", Text: fmt.Sprintf("*Account ID:*\n`%s`", report.Metadata.AccountID)},
 				{Type: "mrkdwn", Text: fmt.Sprintf("*Billing Month:*\n%s", report.Metadata.BillingMonth)},
 				{Type: "mrkdwn", Text: fmt.Sprintf("*Period:*\n%s to %s", report.Metadata.PeriodStart, report.Metadata.PeriodEnd)},
-				{Type: "mrkdwn", Text: fmt.Sprintf("*Total Unblended:*\n*$%.2f %s*", report.Totals.UnblendedCost, report.Metadata.Currency)},
+				{Type: "mrkdwn", Text: fmt.Sprintf("*Total Unblended:*\n*%s%.2f %s*", sym, report.Totals.UnblendedCost, report.Metadata.Currency)},
 			},
 		},
 	}
@@ -60,8 +61,8 @@ func SendSlackNotification(ctx context.Context, webhookURL string, report *awscl
 		blocks = append(blocks, SlackBlock{
 			Type: "section",
 			Fields: []*SlackText{
-				{Type: "mrkdwn", Text: fmt.Sprintf("*Previous Spend:*\n$%.2f %s", report.Totals.PrevUnblendedCost, report.Metadata.Currency)},
-				{Type: "mrkdwn", Text: fmt.Sprintf("*MoM Delta:*\n%s (%s)", formatCurrencyDelta(report.Totals.MoMDeltaAmount), formatPercentDelta(report.Totals.MoMDeltaPercent))},
+				{Type: "mrkdwn", Text: fmt.Sprintf("*Previous Spend:*\n%s%.2f %s", sym, report.Totals.PrevUnblendedCost, report.Metadata.Currency)},
+				{Type: "mrkdwn", Text: fmt.Sprintf("*MoM Delta:*\n%s (%s)", formatCurrencyDelta(report.Totals.MoMDeltaAmount, sym), formatPercentDelta(report.Totals.MoMDeltaPercent))},
 			},
 		})
 	}
@@ -75,9 +76,9 @@ func SendSlackNotification(ctx context.Context, webhookURL string, report *awscl
 		for i := 0; i < maxItems; i++ {
 			item := report.Items[i]
 			if report.HasComparison && item.HasPreviousCost {
-				breakdown.WriteString(fmt.Sprintf("• *%s*: $%.2f (%s)\n", item.Name, item.UnblendedCost, formatCurrencyDelta(item.MoMDeltaAmount)))
+				breakdown.WriteString(fmt.Sprintf("• *%s*: %s%.2f (%s)\n", item.Name, sym, item.UnblendedCost, formatCurrencyDelta(item.MoMDeltaAmount, sym)))
 			} else {
-				breakdown.WriteString(fmt.Sprintf("• *%s*: $%.2f\n", item.Name, item.UnblendedCost))
+				breakdown.WriteString(fmt.Sprintf("• *%s*: %s%.2f\n", item.Name, sym, item.UnblendedCost))
 			}
 		}
 		blocks = append(blocks, SlackBlock{
@@ -117,14 +118,17 @@ func SendSlackNotification(ctx context.Context, webhookURL string, report *awscl
 	return nil
 }
 
-func formatCurrencyDelta(v float64) string {
+func formatCurrencyDelta(v float64, sym string) string {
+	if sym == "" {
+		sym = "$"
+	}
 	if math.Abs(v) < 0.005 {
-		return "$0.00"
+		return fmt.Sprintf("%s0.00", sym)
 	}
 	if v > 0 {
-		return fmt.Sprintf("+$%.2f", v)
+		return fmt.Sprintf("+%s%.2f", sym, v)
 	}
-	return fmt.Sprintf("-$%.2f", math.Abs(v))
+	return fmt.Sprintf("-%s%.2f", sym, math.Abs(v))
 }
 
 func formatPercentDelta(v float64) string {

@@ -42,9 +42,12 @@ func RenderTable(w io.Writer, r *awsclient.CostReport, noColor bool) error {
 	b.WriteString(fmt.Sprintf(" Active %-12s %d\n", groupLabel+":", r.Metadata.ActiveServices))
 
 	// Totals summary section
+	sym := r.Metadata.CurrencySymbol()
+	diffHeader := fmt.Sprintf("Diff (%s)", sym)
+
 	b.WriteString(divSingle + "\n")
 	if r.HasComparison {
-		b.WriteString(fmt.Sprintf(" %-24s | %18s | %17s | %16s | %16s\n", "Metric", "Amount ("+r.Metadata.Currency+")", "Prev ("+r.Metadata.Currency+")", "Diff ($)", "% Δ"))
+		b.WriteString(fmt.Sprintf(" %-24s | %18s | %17s | %16s | %16s\n", "Metric", "Amount ("+r.Metadata.Currency+")", "Prev ("+r.Metadata.Currency+")", diffHeader, "% Δ"))
 		b.WriteString(divSingle + "\n")
 
 		unblendedDiffStr := colorize(r.Totals.MoMDeltaAmount, formatTableDiff(r.Totals.MoMDeltaAmount, 16), noColor)
@@ -79,7 +82,7 @@ func RenderTable(w io.Writer, r *awsclient.CostReport, noColor bool) error {
 	}
 
 	if r.HasComparison {
-		b.WriteString(fmt.Sprintf(" %-42s | %15s | %14s | %10s | %10s\n", truncate(headerCol, 42), "Unblended ("+r.Metadata.Currency+")", "Prev ("+r.Metadata.Currency+")", "Diff ($)", "% Δ"))
+		b.WriteString(fmt.Sprintf(" %-42s | %15s | %14s | %10s | %10s\n", truncate(headerCol, 42), "Unblended ("+r.Metadata.Currency+")", "Prev ("+r.Metadata.Currency+")", truncate(diffHeader, 10), "% Δ"))
 		b.WriteString(divSingle + "\n")
 		for _, item := range r.Items {
 			diffStr := formatTableDiff(item.MoMDeltaAmount, 10)

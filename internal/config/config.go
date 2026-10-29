@@ -138,21 +138,22 @@ type Config struct {
 	SlackWebhook string            `yaml:"slack_webhook"`
 
 	// Runtime options resolved from CLI flags or env
-	ConfigFile      string       `yaml:"-"`
-	ShowVersion     bool         `yaml:"-"`
-	RunServer       bool         `yaml:"-"`
-	ListServices    bool         `yaml:"-"`
-	MonthsBack      int          `yaml:"-"`
-	StartDate       string       `yaml:"-"`
-	EndDate         string       `yaml:"-"`
-	MetricsList     []string     `yaml:"-"`
-	CompareMoM      bool         `yaml:"-"`
-	MockMode        bool         `yaml:"-"`
-	Filters         []string     `yaml:"filters"`
-	TagFilters      TagFilterMap `yaml:"tag_filters"`
-	NoColor         bool         `yaml:"no_color"`
-	OutputFile      string       `yaml:"output_file"`
-	JSONSummaryFile string       `yaml:"json_summary_file"`
+	ConfigFile            string       `yaml:"-"`
+	ShowVersion           bool         `yaml:"-"`
+	RunServer             bool         `yaml:"-"`
+	ListServices          bool         `yaml:"-"`
+	MonthsBack            int          `yaml:"-"`
+	StartDate             string       `yaml:"-"`
+	EndDate               string       `yaml:"-"`
+	MetricsList           []string     `yaml:"-"`
+	CompareMoM            bool         `yaml:"-"`
+	MockMode              bool         `yaml:"-"`
+	Filters               []string     `yaml:"filters"`
+	TagFilters            TagFilterMap `yaml:"tag_filters"`
+	NoColor               bool         `yaml:"no_color"`
+	OutputFile            string       `yaml:"output_file"`
+	JSONSummaryFile       string       `yaml:"json_summary_file"`
+	CurrencyExplicitlySet bool         `yaml:"-"`
 }
 
 // DefaultsConfig represents default billing query parameters.
@@ -250,6 +251,7 @@ func LoadConfig(args []string) (*Config, error) {
 		jsonSumFlag  = fs.String("json-summary", "", "Optional file path to write machine-readable summary JSON")
 		topFlag      = fs.Int("top", 0, "Show top N highest cost items and aggregate remainder into Other")
 		slackFlag    = fs.String("slack-webhook", "", "Incoming Slack webhook URL to post formatted cost report")
+		currencyFlag = fs.String("currency", "", "Currency code (e.g. USD, EUR, GBP) to override auto-detected AWS billing currency")
 		servicesFlag = fs.Bool("services", false, "List official AWS Cost Explorer service names")
 		listServFlag = fs.Bool("list-services", false, "Alias for --services")
 	)
@@ -288,9 +290,21 @@ func LoadConfig(args []string) (*Config, error) {
 		if err := yaml.Unmarshal(data, cfg); err != nil {
 			return nil, fmt.Errorf("failed to parse config YAML: %w", err)
 		}
+		var raw map[string]interface{}
+		if err := yaml.Unmarshal(data, &raw); err == nil {
+			if defs, ok := raw["defaults"].(map[string]interface{}); ok {
+				if _, set := defs["currency"]; set {
+					cfg.CurrencyExplicitlySet = true
+				}
+			}
+		}
 	}
 
 	// Apply CLI flag overrides (highest precedence)
+	if *currencyFlag != "" {
+		cfg.Defaults.Currency = strings.ToUpper(strings.TrimSpace(*currencyFlag))
+		cfg.CurrencyExplicitlySet = true
+	}
 	if *months > 0 {
 		cfg.Defaults.MonthsBack = *months
 	}

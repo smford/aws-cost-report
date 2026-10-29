@@ -183,3 +183,44 @@ func TestRenderCSV(t *testing.T) {
 		t.Errorf("unexpected first record: %s", lines[1])
 	}
 }
+
+func TestRenderMarkdownWithNonUSDCurrency(t *testing.T) {
+	report := getTestReport(true)
+	report.Metadata.Currency = "EUR"
+
+	var buf bytes.Buffer
+	err := RenderMarkdown(&buf, report, false, 0.00)
+	if err != nil {
+		t.Fatalf("RenderMarkdown with EUR failed: %v", err)
+	}
+
+	out := buf.String()
+	if !strings.Contains(out, "Delta (€)") {
+		t.Errorf("expected 'Delta (€)' header in markdown, got:\n%s", out)
+	}
+	if !strings.Contains(out, "**€21.58**") {
+		t.Errorf("expected '**€21.58**' in markdown, got:\n%s", out)
+	}
+	if !strings.Contains(out, "+€0.31") {
+		t.Errorf("expected '+€0.31' in markdown, got:\n%s", out)
+	}
+}
+
+func TestRenderTableWithNonUSDCurrency(t *testing.T) {
+	report := getTestReport(true)
+	report.Metadata.Currency = "GBP"
+
+	var buf bytes.Buffer
+	err := RenderTable(&buf, report, true)
+	if err != nil {
+		t.Fatalf("RenderTable with GBP failed: %v", err)
+	}
+
+	out := buf.String()
+	if !strings.Contains(out, "Diff (£)") {
+		t.Errorf("expected 'Diff (£)' header in table, got:\n%s", out)
+	}
+	if !strings.Contains(out, "Amount (GBP)") {
+		t.Errorf("expected 'Amount (GBP)' header in table, got:\n%s", out)
+	}
+}

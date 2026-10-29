@@ -82,6 +82,10 @@ inputs:
     description: 'Optional file path to save report output'
     required: false
     default: ''
+  currency:
+    description: 'Override currency code and symbol (e.g. USD, EUR, GBP). Auto-detected from AWS by default.'
+    required: false
+    default: ''
 
 outputs:
   report:
@@ -247,6 +251,10 @@ runs:
 
         if [ -n "${{ inputs.config }}" ]; then
           ARGS+=("--config=${{ inputs.config }}")
+        fi
+
+        if [ -n "${{ inputs.currency }}" ]; then
+          ARGS+=("--currency=${{ inputs.currency }}")
         fi
 
         REPORT_TMP="${RUNNER_TEMP:-/tmp}/aws-cost-report-output.txt"

@@ -1,5 +1,7 @@
 package awsclient
 
+import "strings"
+
 // LineItem represents aggregated billing data for a single group (e.g. AWS service or linked account).
 type LineItem struct {
 	Name              string  `json:"name"`
@@ -48,4 +50,56 @@ type CostReport struct {
 	Totals        TotalCosts     `json:"totals"`
 	Items         []LineItem     `json:"items"`
 	HasComparison bool           `json:"has_comparison"`
+}
+
+// CurrencySymbol maps a 3-letter ISO currency code to its standard symbol.
+// If the currency code is unrecognized or already a symbol, it returns the trimmed symbol or code.
+func CurrencySymbol(currency string) string {
+	switch strings.ToUpper(strings.TrimSpace(currency)) {
+	case "USD":
+		return "$"
+	case "EUR":
+		return "€"
+	case "GBP":
+		return "£"
+	case "JPY", "CNY":
+		return "¥"
+	case "INR":
+		return "₹"
+	case "AUD":
+		return "A$"
+	case "CAD":
+		return "CA$"
+	case "NZD":
+		return "NZ$"
+	case "CHF":
+		return "CHF"
+	case "BRL":
+		return "R$"
+	case "SEK", "NOK", "DKK":
+		return "kr"
+	case "SGD":
+		return "S$"
+	case "HKD":
+		return "HK$"
+	case "MXN":
+		return "Mex$"
+	case "ZAR":
+		return "R"
+	case "KRW":
+		return "₩"
+	case "ILS":
+		return "₪"
+	default:
+		trimmed := strings.TrimSpace(currency)
+		if trimmed == "" {
+			return "$"
+		}
+		return trimmed
+	}
+}
+
+// CurrencySymbol returns the representative symbol for the report's currency.
+func (m ReportMetadata) CurrencySymbol() string {
+	return CurrencySymbol(m.Currency)
 }

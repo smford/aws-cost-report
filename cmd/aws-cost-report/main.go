@@ -67,6 +67,7 @@ GENERATE FLAGS:
   --output, -o <path>     Write formatted report output to specified file
   --json-summary <path>   Write machine-readable summary metrics to JSON file
   --slack-webhook <url>   Post formatted Block Kit report to incoming Slack webhook
+  --currency <code>       Override currency code and symbol (e.g. USD, EUR, GBP). Auto-detected by default
   --no-color              Disable ANSI colors in terminal tables (honors NO_COLOR=1)
   --mock                  Run in offline mode with simulated AWS billing data
   --config, -c <path>     Path to YAML configuration file (default: config.yaml)
@@ -302,8 +303,9 @@ func runCLI(cfg *config.Config) {
 
 	// Budget guardrail check
 	if thresholdBreached {
-		fmt.Fprintf(os.Stderr, "\n[BUDGET ALERT] Total cost (%.2f %s) exceeds configured threshold (%.2f %s)!\n",
-			report.Totals.UnblendedCost, cfg.Defaults.Currency, cfg.Budget.FailOnThreshold, cfg.Defaults.Currency)
+		sym := report.Metadata.CurrencySymbol()
+		fmt.Fprintf(os.Stderr, "\n[BUDGET ALERT] Total cost (%s%.2f %s) exceeds configured threshold (%s%.2f %s)!\n",
+			sym, report.Totals.UnblendedCost, report.Metadata.Currency, sym, cfg.Budget.FailOnThreshold, report.Metadata.Currency)
 		os.Exit(1)
 	}
 }

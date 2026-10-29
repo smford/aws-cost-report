@@ -192,6 +192,35 @@ func TestRunCLIMockModeWithTagFilter(t *testing.T) {
 	}
 }
 
+func TestRunCLIMockModeWithCurrency(t *testing.T) {
+	tmpDir := t.TempDir()
+	outFile := tmpDir + "/output_eur.md"
+
+	cfg, err := config.LoadConfig([]string{
+		"--mock",
+		"--currency", "EUR",
+		"--format", "markdown",
+		"--output", outFile,
+	})
+	if err != nil {
+		t.Fatalf("failed to load config: %v", err)
+	}
+
+	runCLI(cfg)
+
+	outData, err := os.ReadFile(outFile)
+	if err != nil {
+		t.Fatalf("failed to read output file: %v", err)
+	}
+	content := string(outData)
+	if !strings.Contains(content, "| **Currency** | EUR |") {
+		t.Errorf("expected Currency EUR in markdown output, got:\n%s", content)
+	}
+	if !strings.Contains(content, "€21.58") {
+		t.Errorf("expected €21.58 in markdown output, got:\n%s", content)
+	}
+}
+
 func TestFormatHelp(t *testing.T) {
 	helpText := formatHelp()
 	if !strings.Contains(helpText, "COMMANDS:") {

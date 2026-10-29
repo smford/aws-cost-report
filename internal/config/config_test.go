@@ -55,6 +55,12 @@ reporting:
 	if cfg.Defaults.MonthsBack != 3 {
 		t.Errorf("expected MonthsBack 3, got %d", cfg.Defaults.MonthsBack)
 	}
+	if cfg.Defaults.Currency != "EUR" {
+		t.Errorf("expected Currency EUR, got %s", cfg.Defaults.Currency)
+	}
+	if !cfg.CurrencyExplicitlySet {
+		t.Errorf("expected CurrencyExplicitlySet true when set in YAML")
+	}
 	if cfg.Defaults.MinDisplayCost != 0.50 {
 		t.Errorf("expected MinDisplayCost 0.50, got %f", cfg.Defaults.MinDisplayCost)
 	}
@@ -73,6 +79,7 @@ reporting:
 		"--group-by", "TAG:Environment",
 		"--format", "markdown",
 		"--fail-on-threshold", "250.00",
+		"--currency", "GBP",
 		"--compare",
 	}
 	cfgWithFlags, err := LoadConfig(args)
@@ -93,6 +100,9 @@ reporting:
 	}
 	if cfgWithFlags.Budget.FailOnThreshold != 250.00 {
 		t.Errorf("expected threshold 250, got %f", cfgWithFlags.Budget.FailOnThreshold)
+	}
+	if cfgWithFlags.Defaults.Currency != "GBP" {
+		t.Errorf("expected Currency GBP overridden by flag, got %s", cfgWithFlags.Defaults.Currency)
 	}
 	if !cfgWithFlags.CompareMoM {
 		t.Errorf("expected CompareMoM true")

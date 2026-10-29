@@ -105,12 +105,13 @@ func (c *Client) GenerateReport(ctx context.Context, cfg *config.Config, now tim
 
 	// 3. Fetch period costs (concurrently if comparison is enabled)
 	var (
-		currentTotals TotalCosts
-		currentItems  []LineItem
-		prevTotals    TotalCosts
-		prevItems     []LineItem
-		errCurr       error
-		errPrev       error
+		currentTotals    TotalCosts
+		currentItems     []LineItem
+		detectedCurrency string
+		prevTotals       TotalCosts
+		prevItems        []LineItem
+		errCurr          error
+		errPrev          error
 	)
 
 	if cfg.CompareMoM {
@@ -120,12 +121,12 @@ func (c *Client) GenerateReport(ctx context.Context, cfg *config.Config, now tim
 
 		go func() {
 			defer wg.Done()
-			currentTotals, currentItems, errCurr = c.fetchCostData(ctx, cfg, dateRange)
+			currentTotals, currentItems, detectedCurrency, errCurr = c.fetchCostData(ctx, cfg, dateRange)
 		}()
 
 		go func() {
 			defer wg.Done()
-			prevTotals, prevItems, errPrev = c.fetchCostData(ctx, cfg, prevDateRange)
+			prevTotals, prevItems, _, errPrev = c.fetchCostData(ctx, cfg, prevDateRange)
 		}()
 
 		wg.Wait()
@@ -137,10 +138,18 @@ func (c *Client) GenerateReport(ctx context.Context, cfg *config.Config, now tim
 			return nil, fmt.Errorf("failed to fetch comparison period: %w", errPrev)
 		}
 	} else {
-		currentTotals, currentItems, errCurr = c.fetchCostData(ctx, cfg, dateRange)
+		currentTotals, currentItems, detectedCurrency, errCurr = c.fetchCostData(ctx, cfg, dateRange)
 		if errCurr != nil {
 			return nil, errCurr
 		}
+	}
+
+	reportCurrency := cfg.Defaults.Currency
+	if !cfg.CurrencyExplicitlySet && detectedCurrency != "" {
+		reportCurrency = detectedCurrency
+	}
+	if reportCurrency == "" {
+		reportCurrency = "USD"
 	}
 
 	report := &CostReport{
@@ -151,7 +160,7 @@ func (c *Client) GenerateReport(ctx context.Context, cfg *config.Config, now tim
 			PeriodEnd:        dateRange.EndInclusive.Format(DateFormat),
 			AWSPeriodStart:   dateRange.Start.Format(DateFormat),
 			AWSPeriodEnd:     dateRange.EndExclusiveAWS.Format(DateFormat),
-			Currency:         cfg.Defaults.Currency,
+			Currency:         reportCurrency,
 			EstimatedOrFinal: "Finalized",
 			ActiveServices:   len(currentItems),
 			GroupKey:         cfg.Grouping.Key,
@@ -317,7 +326,7 @@ func (c *Client) GenerateReport(ctx context.Context, cfg *config.Config, now tim
 }
 
 // fetchCostData executes paginated queries against AWS Cost Explorer.
-func (c *Client) fetchCostData(ctx context.Context, cfg *config.Config, dateRange *DateRange) (TotalCosts, []LineItem, error) {
+func (c *Client) fetchCostData(ctx context.Context, cfg *config.Config, dateRange *DateRange) (TotalCosts, []LineItem, string, error) {
 	timePeriod := &cetypes.DateInterval{
 		Start: aws.String(dateRange.Start.Format(DateFormat)),
 		End:   aws.String(dateRange.EndExclusiveAWS.Format(DateFormat)),
@@ -341,6 +350,7 @@ func (c *Client) fetchCostData(ctx context.Context, cfg *config.Config, dateRang
 	}
 
 	var totals TotalCosts
+	var detectedCurrency string
 	itemsMap := make(map[string]*LineItem)
 	var nextPageToken *string
 
@@ -384,12 +394,17 @@ func (c *Client) fetchCostData(ctx context.Context, cfg *config.Config, dateRang
 
 		output, err := c.getCostAndUsageWithRetry(ctx, input)
 		if err != nil {
-			return totals, nil, fmt.Errorf("AWS Cost Explorer GetCostAndUsage failed: %w", err)
+			return totals, nil, "", fmt.Errorf("AWS Cost Explorer GetCostAndUsage failed: %w", err)
 		}
 
 		for _, result := range output.ResultsByTime {
 			// Aggregate totals
 			if result.Total != nil {
+				for _, m := range result.Total {
+					if m.Unit != nil && *m.Unit != "" && detectedCurrency == "" {
+						detectedCurrency = *m.Unit
+					}
+				}
 				if m, ok := result.Total["UnblendedCost"]; ok && m.Amount != nil {
 					totals.UnblendedCost += parseFloat(*m.Amount)
 				}
@@ -403,6 +418,12 @@ func (c *Client) fetchCostData(ctx context.Context, cfg *config.Config, dateRang
 
 			// Aggregate line items
 			for _, grp := range result.Groups {
+				for _, m := range grp.Metrics {
+					if m.Unit != nil && *m.Unit != "" && detectedCurrency == "" {
+						detectedCurrency = *m.Unit
+					}
+				}
+
 				name := "No Group Name"
 				if len(grp.Keys) > 0 {
 					name = grp.Keys[0]
@@ -484,7 +505,7 @@ func (c *Client) fetchCostData(ctx context.Context, cfg *config.Config, dateRang
 		totals.AmortizedCost = totals.UnblendedCost
 	}
 
-	return totals, items, nil
+	return totals, items, detectedCurrency, nil
 }
 
 // GenerateMockReport generates realistic mock billing data matching specification benchmarks.
@@ -598,6 +619,11 @@ func GenerateMockReport(cfg *config.Config, now time.Time) (*CostReport, error) 
 	}
 	filtered = applyTopNAggregation(filtered, cfg.Defaults.Top, cfg.Grouping.Key)
 
+	mockCurrency := cfg.Defaults.Currency
+	if mockCurrency == "" {
+		mockCurrency = "USD"
+	}
+
 	report := &CostReport{
 		Metadata: ReportMetadata{
 			AccountID:        mockAccountID,
@@ -606,7 +632,7 @@ func GenerateMockReport(cfg *config.Config, now time.Time) (*CostReport, error) 
 			PeriodEnd:        dateRange.EndInclusive.Format(DateFormat),
 			AWSPeriodStart:   dateRange.Start.Format(DateFormat),
 			AWSPeriodEnd:     dateRange.EndExclusiveAWS.Format(DateFormat),
-			Currency:         cfg.Defaults.Currency,
+			Currency:         mockCurrency,
 			EstimatedOrFinal: "Finalized",
 			ActiveServices:   len(filtered),
 			GroupKey:         cfg.Grouping.Key,
