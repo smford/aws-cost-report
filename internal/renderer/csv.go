@@ -24,6 +24,14 @@ func RenderCSV(w io.Writer, r *awsclient.CostReport) error {
 		groupLabel = "Service"
 	}
 
+	hasNet := false
+	for _, item := range r.Items {
+		if item.NetUnblendedCost > 0 || item.NetAmortizedCost > 0 {
+			hasNet = true
+			break
+		}
+	}
+
 	if r.HasComparison {
 		headers := []string{
 			groupLabel,
@@ -33,10 +41,11 @@ func RenderCSV(w io.Writer, r *awsclient.CostReport) error {
 			"DeltaPercent",
 			"BlendedCost",
 			"AmortizedCost",
-			"Currency",
-			"PeriodStart",
-			"PeriodEnd",
 		}
+		if hasNet {
+			headers = append(headers, "NetUnblendedCost", "NetAmortizedCost")
+		}
+		headers = append(headers, "Currency", "PeriodStart", "PeriodEnd")
 		if err := writer.Write(headers); err != nil {
 			return err
 		}
@@ -50,10 +59,11 @@ func RenderCSV(w io.Writer, r *awsclient.CostReport) error {
 				fmt.Sprintf("%.2f", item.MoMDeltaPercent),
 				fmt.Sprintf("%.2f", item.BlendedCost),
 				fmt.Sprintf("%.2f", item.AmortizedCost),
-				r.Metadata.Currency,
-				r.Metadata.PeriodStart,
-				r.Metadata.PeriodEnd,
 			}
+			if hasNet {
+				record = append(record, fmt.Sprintf("%.2f", item.NetUnblendedCost), fmt.Sprintf("%.2f", item.NetAmortizedCost))
+			}
+			record = append(record, r.Metadata.Currency, r.Metadata.PeriodStart, r.Metadata.PeriodEnd)
 			if err := writer.Write(record); err != nil {
 				return err
 			}
@@ -64,10 +74,11 @@ func RenderCSV(w io.Writer, r *awsclient.CostReport) error {
 			"UnblendedCost",
 			"BlendedCost",
 			"AmortizedCost",
-			"Currency",
-			"PeriodStart",
-			"PeriodEnd",
 		}
+		if hasNet {
+			headers = append(headers, "NetUnblendedCost", "NetAmortizedCost")
+		}
+		headers = append(headers, "Currency", "PeriodStart", "PeriodEnd")
 		if err := writer.Write(headers); err != nil {
 			return err
 		}
@@ -78,10 +89,11 @@ func RenderCSV(w io.Writer, r *awsclient.CostReport) error {
 				fmt.Sprintf("%.2f", item.UnblendedCost),
 				fmt.Sprintf("%.2f", item.BlendedCost),
 				fmt.Sprintf("%.2f", item.AmortizedCost),
-				r.Metadata.Currency,
-				r.Metadata.PeriodStart,
-				r.Metadata.PeriodEnd,
 			}
+			if hasNet {
+				record = append(record, fmt.Sprintf("%.2f", item.NetUnblendedCost), fmt.Sprintf("%.2f", item.NetAmortizedCost))
+			}
+			record = append(record, r.Metadata.Currency, r.Metadata.PeriodStart, r.Metadata.PeriodEnd)
 			if err := writer.Write(record); err != nil {
 				return err
 			}

@@ -889,3 +889,72 @@ func TestTwoDimensionalGroupByMockReport(t *testing.T) {
 		t.Errorf("expected item to contain [Environment=Production], got %q", firstItem)
 	}
 }
+
+func TestNetMetricsInReport(t *testing.T) {
+	// 1. Test Mock Report with Net metrics requested
+	cfg := config.DefaultConfig()
+	cfg.Defaults.Metrics = []string{"UnblendedCost", "NetUnblendedCost", "NetAmortizedCost"}
+	refTime := time.Date(2026, time.October, 28, 12, 0, 0, 0, time.UTC)
+	mockReport, err := GenerateMockReport(cfg, refTime)
+	if err != nil {
+		t.Fatalf("GenerateMockReport failed: %v", err)
+	}
+	if mockReport.Totals.NetUnblendedCost <= 0 {
+		t.Errorf("expected NetUnblendedCost > 0, got %f", mockReport.Totals.NetUnblendedCost)
+	}
+	if mockReport.Totals.NetAmortizedCost <= 0 {
+		t.Errorf("expected NetAmortizedCost > 0, got %f", mockReport.Totals.NetAmortizedCost)
+	}
+
+	// 2. Test Real Client parsing with Net metrics
+	page := &costexplorer.GetCostAndUsageOutput{
+		ResultsByTime: []cetypes.ResultByTime{
+			{
+				TimePeriod: &cetypes.DateInterval{
+					Start: aws.String("2026-09-01"),
+					End:   aws.String("2026-10-01"),
+				},
+				Total: map[string]cetypes.MetricValue{
+					"UnblendedCost":    {Amount: aws.String("100.00"), Unit: aws.String("USD")},
+					"NetUnblendedCost": {Amount: aws.String("90.00"), Unit: aws.String("USD")},
+					"NetAmortizedCost": {Amount: aws.String("85.00"), Unit: aws.String("USD")},
+				},
+				Groups: []cetypes.Group{
+					{
+						Keys: []string{"Amazon EC2"},
+						Metrics: map[string]cetypes.MetricValue{
+							"UnblendedCost":    {Amount: aws.String("100.00")},
+							"NetUnblendedCost": {Amount: aws.String("90.00")},
+							"NetAmortizedCost": {Amount: aws.String("85.00")},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	ceMock := &mockCEClient{pages: []*costexplorer.GetCostAndUsageOutput{page}}
+	stsMock := &mockSTSClient{accountID: "111222333444"}
+	client := &Client{ceClient: ceMock, stsClient: stsMock}
+
+	report, err := client.GenerateReport(context.Background(), cfg, refTime)
+	if err != nil {
+		t.Fatalf("GenerateReport failed: %v", err)
+	}
+
+	if report.Totals.NetUnblendedCost != 90.00 {
+		t.Errorf("expected NetUnblendedCost 90.00, got %f", report.Totals.NetUnblendedCost)
+	}
+	if report.Totals.NetAmortizedCost != 85.00 {
+		t.Errorf("expected NetAmortizedCost 85.00, got %f", report.Totals.NetAmortizedCost)
+	}
+	if len(report.Items) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(report.Items))
+	}
+	if report.Items[0].NetUnblendedCost != 90.00 {
+		t.Errorf("expected item NetUnblendedCost 90.00, got %f", report.Items[0].NetUnblendedCost)
+	}
+	if report.Items[0].NetAmortizedCost != 85.00 {
+		t.Errorf("expected item NetAmortizedCost 85.00, got %f", report.Items[0].NetAmortizedCost)
+	}
+}

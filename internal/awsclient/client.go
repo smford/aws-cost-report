@@ -214,6 +214,8 @@ func (c *Client) GenerateReport(ctx context.Context, cfg *config.Config, now tim
 		report.Totals.PrevUnblendedCost = prevTotals.UnblendedCost
 		report.Totals.PrevBlendedCost = prevTotals.BlendedCost
 		report.Totals.PrevAmortizedCost = prevTotals.AmortizedCost
+		report.Totals.PrevNetUnblendedCost = prevTotals.NetUnblendedCost
+		report.Totals.PrevNetAmortizedCost = prevTotals.NetAmortizedCost
 		report.Totals.HasPreviousCost = true
 		report.Totals.MoMDeltaAmount = roundToTwo(report.Totals.UnblendedCost - prevTotals.UnblendedCost)
 		if prevTotals.UnblendedCost > 0 {
@@ -232,6 +234,8 @@ func (c *Client) GenerateReport(ctx context.Context, cfg *config.Config, now tim
 				report.Items[i].PrevUnblendedCost = prev.UnblendedCost
 				report.Items[i].PrevBlendedCost = prev.BlendedCost
 				report.Items[i].PrevAmortizedCost = prev.AmortizedCost
+				report.Items[i].PrevNetUnblendedCost = prev.NetUnblendedCost
+				report.Items[i].PrevNetAmortizedCost = prev.NetAmortizedCost
 				report.Items[i].HasPreviousCost = true
 				report.Items[i].MoMDeltaAmount = roundToTwo(report.Items[i].UnblendedCost - prev.UnblendedCost)
 				if prev.UnblendedCost > 0 {
@@ -248,16 +252,20 @@ func (c *Client) GenerateReport(ctx context.Context, cfg *config.Config, now tim
 		for name, prev := range prevMap {
 			if prev.UnblendedCost >= cfg.Defaults.MinDisplayCost {
 				report.Items = append(report.Items, LineItem{
-					Name:              name,
-					UnblendedCost:     0.0,
-					BlendedCost:       0.0,
-					AmortizedCost:     0.0,
-					PrevUnblendedCost: prev.UnblendedCost,
-					PrevBlendedCost:   prev.BlendedCost,
-					PrevAmortizedCost: prev.AmortizedCost,
-					HasPreviousCost:   true,
-					MoMDeltaAmount:    roundToTwo(-prev.UnblendedCost),
-					MoMDeltaPercent:   -100.0,
+					Name:                 name,
+					UnblendedCost:        0.0,
+					BlendedCost:          0.0,
+					AmortizedCost:        0.0,
+					NetUnblendedCost:     0.0,
+					NetAmortizedCost:     0.0,
+					PrevUnblendedCost:    prev.UnblendedCost,
+					PrevBlendedCost:      prev.BlendedCost,
+					PrevAmortizedCost:    prev.AmortizedCost,
+					PrevNetUnblendedCost: prev.NetUnblendedCost,
+					PrevNetAmortizedCost: prev.NetAmortizedCost,
+					HasPreviousCost:      true,
+					MoMDeltaAmount:       roundToTwo(-prev.UnblendedCost),
+					MoMDeltaPercent:      -100.0,
 				})
 			}
 		}
@@ -280,23 +288,31 @@ func (c *Client) GenerateReport(ctx context.Context, cfg *config.Config, now tim
 
 	// Recalculate totals if filters were applied or if initial totals were empty
 	if len(cfg.Filters) > 0 || (report.Totals.UnblendedCost == 0.0 && len(filtered) > 0) {
-		var uCost, bCost, aCost, prevUCost, prevBCost, prevACost float64
+		var uCost, bCost, aCost, nuCost, naCost, prevUCost, prevBCost, prevACost, prevNUCost, prevNACost float64
 		for _, it := range filtered {
 			uCost += it.UnblendedCost
 			bCost += it.BlendedCost
 			aCost += it.AmortizedCost
+			nuCost += it.NetUnblendedCost
+			naCost += it.NetAmortizedCost
 			if it.HasPreviousCost {
 				prevUCost += it.PrevUnblendedCost
 				prevBCost += it.PrevBlendedCost
 				prevACost += it.PrevAmortizedCost
+				prevNUCost += it.PrevNetUnblendedCost
+				prevNACost += it.PrevNetAmortizedCost
 			}
 		}
 		uCost = roundToTwo(uCost)
 		bCost = roundToTwo(bCost)
 		aCost = roundToTwo(aCost)
+		nuCost = roundToTwo(nuCost)
+		naCost = roundToTwo(naCost)
 		prevUCost = roundToTwo(prevUCost)
 		prevBCost = roundToTwo(prevBCost)
 		prevACost = roundToTwo(prevACost)
+		prevNUCost = roundToTwo(prevNUCost)
+		prevNACost = roundToTwo(prevNACost)
 		dAmount := roundToTwo(uCost - prevUCost)
 		dPct := 0.0
 		if prevUCost > 0 {
@@ -304,15 +320,19 @@ func (c *Client) GenerateReport(ctx context.Context, cfg *config.Config, now tim
 		}
 
 		report.Totals = TotalCosts{
-			UnblendedCost:     uCost,
-			BlendedCost:       bCost,
-			AmortizedCost:     aCost,
-			PrevUnblendedCost: prevUCost,
-			PrevBlendedCost:   prevBCost,
-			PrevAmortizedCost: prevACost,
-			MoMDeltaAmount:    dAmount,
-			MoMDeltaPercent:   dPct,
-			HasPreviousCost:   cfg.CompareMoM,
+			UnblendedCost:        uCost,
+			BlendedCost:          bCost,
+			AmortizedCost:        aCost,
+			NetUnblendedCost:     nuCost,
+			NetAmortizedCost:     naCost,
+			PrevUnblendedCost:    prevUCost,
+			PrevBlendedCost:      prevBCost,
+			PrevAmortizedCost:    prevACost,
+			PrevNetUnblendedCost: prevNUCost,
+			PrevNetAmortizedCost: prevNACost,
+			MoMDeltaAmount:       dAmount,
+			MoMDeltaPercent:      dPct,
+			HasPreviousCost:      cfg.CompareMoM,
 		}
 	}
 
@@ -553,6 +573,12 @@ func (c *Client) fetchCostData(ctx context.Context, cfg *config.Config, dateRang
 				if m, ok := result.Total["AmortizedCost"]; ok && m.Amount != nil {
 					totals.AmortizedCost += parseFloat(*m.Amount)
 				}
+				if m, ok := result.Total["NetUnblendedCost"]; ok && m.Amount != nil {
+					totals.NetUnblendedCost += parseFloat(*m.Amount)
+				}
+				if m, ok := result.Total["NetAmortizedCost"]; ok && m.Amount != nil {
+					totals.NetAmortizedCost += parseFloat(*m.Amount)
+				}
 			}
 
 			// Aggregate line items
@@ -582,6 +608,12 @@ func (c *Client) fetchCostData(ctx context.Context, cfg *config.Config, dateRang
 				if m, exists := grp.Metrics["AmortizedCost"]; exists && m.Amount != nil {
 					item.AmortizedCost += parseFloat(*m.Amount)
 				}
+				if m, exists := grp.Metrics["NetUnblendedCost"]; exists && m.Amount != nil {
+					item.NetUnblendedCost += parseFloat(*m.Amount)
+				}
+				if m, exists := grp.Metrics["NetAmortizedCost"]; exists && m.Amount != nil {
+					item.NetAmortizedCost += parseFloat(*m.Amount)
+				}
 
 				if mKey != "" {
 					if itemMonthlyCosts[name] == nil {
@@ -602,13 +634,17 @@ func (c *Client) fetchCostData(ctx context.Context, cfg *config.Config, dateRang
 	totals.UnblendedCost = roundToTwo(totals.UnblendedCost)
 	totals.BlendedCost = roundToTwo(totals.BlendedCost)
 	totals.AmortizedCost = roundToTwo(totals.AmortizedCost)
+	totals.NetUnblendedCost = roundToTwo(totals.NetUnblendedCost)
+	totals.NetAmortizedCost = roundToTwo(totals.NetAmortizedCost)
 
 	var items []LineItem
-	var sumUnblended, sumBlended, sumAmortized float64
+	var sumUnblended, sumBlended, sumAmortized, sumNetUnblended, sumNetAmortized float64
 	for _, item := range itemsMap {
 		item.UnblendedCost = roundToTwo(item.UnblendedCost)
 		item.BlendedCost = roundToTwo(item.BlendedCost)
 		item.AmortizedCost = roundToTwo(item.AmortizedCost)
+		item.NetUnblendedCost = roundToTwo(item.NetUnblendedCost)
+		item.NetAmortizedCost = roundToTwo(item.NetAmortizedCost)
 
 		// For accounts without consolidated billing or upfront amortization,
 		// BlendedCost or AmortizedCost might be returned as 0 by AWS. Fall back to UnblendedCost if so.
@@ -622,6 +658,8 @@ func (c *Client) fetchCostData(ctx context.Context, cfg *config.Config, dateRang
 		sumUnblended += item.UnblendedCost
 		sumBlended += item.BlendedCost
 		sumAmortized += item.AmortizedCost
+		sumNetUnblended += item.NetUnblendedCost
+		sumNetAmortized += item.NetAmortizedCost
 		items = append(items, *item)
 	}
 
@@ -635,6 +673,12 @@ func (c *Client) fetchCostData(ctx context.Context, cfg *config.Config, dateRang
 	}
 	if totals.AmortizedCost == 0.0 && sumAmortized > 0.0 {
 		totals.AmortizedCost = roundToTwo(sumAmortized)
+	}
+	if totals.NetUnblendedCost == 0.0 && sumNetUnblended > 0.0 {
+		totals.NetUnblendedCost = roundToTwo(sumNetUnblended)
+	}
+	if totals.NetAmortizedCost == 0.0 && sumNetAmortized > 0.0 {
+		totals.NetAmortizedCost = roundToTwo(sumNetAmortized)
 	}
 
 	// Fallback for totals if Blended or Amortized are still 0.0 but Unblended > 0.0
@@ -722,6 +766,23 @@ func GenerateMockReport(cfg *config.Config, now time.Time) (*CostReport, error) 
 		{Name: "AWS CloudTrail", UnblendedCost: 0.02, BlendedCost: 0.02, AmortizedCost: 0.02, PrevUnblendedCost: 0.02, PrevBlendedCost: 0.02, PrevAmortizedCost: 0.02, HasPreviousCost: true, MoMDeltaAmount: 0.00, MoMDeltaPercent: 0.00},
 	}
 
+	hasRequestedNet := false
+	for _, m := range cfg.Defaults.Metrics {
+		if strings.HasPrefix(strings.ToLower(m), "net") {
+			hasRequestedNet = true
+			break
+		}
+	}
+
+	if hasRequestedNet {
+		for i := range items {
+			items[i].NetUnblendedCost = roundToTwo(items[i].UnblendedCost * 0.90)
+			items[i].NetAmortizedCost = roundToTwo(items[i].AmortizedCost * 0.90)
+			items[i].PrevNetUnblendedCost = roundToTwo(items[i].PrevUnblendedCost * 0.90)
+			items[i].PrevNetAmortizedCost = roundToTwo(items[i].PrevAmortizedCost * 0.90)
+		}
+	}
+
 	var filtered []LineItem
 	for _, item := range items {
 		if len(cfg.Filters) > 0 && !matchesFilter(item.Name, cfg.Filters) {
@@ -763,25 +824,39 @@ func GenerateMockReport(cfg *config.Config, now time.Time) (*CostReport, error) 
 		MoMDeltaPercent:   2.13,
 		HasPreviousCost:   cfg.CompareMoM,
 	}
+	if hasRequestedNet {
+		totals.NetUnblendedCost = 19.42
+		totals.NetAmortizedCost = 19.42
+		totals.PrevNetUnblendedCost = 19.02
+		totals.PrevNetAmortizedCost = 19.02
+	}
 
 	if len(cfg.Filters) > 0 || len(cfg.TagFilters) > 0 {
-		var uCost, bCost, aCost, prevUCost, prevBCost, prevACost float64
+		var uCost, bCost, aCost, nuCost, naCost, prevUCost, prevBCost, prevACost, prevNUCost, prevNACost float64
 		for _, it := range filtered {
 			uCost += it.UnblendedCost
 			bCost += it.BlendedCost
 			aCost += it.AmortizedCost
+			nuCost += it.NetUnblendedCost
+			naCost += it.NetAmortizedCost
 			if it.HasPreviousCost {
 				prevUCost += it.PrevUnblendedCost
 				prevBCost += it.PrevBlendedCost
 				prevACost += it.PrevAmortizedCost
+				prevNUCost += it.PrevNetUnblendedCost
+				prevNACost += it.PrevNetAmortizedCost
 			}
 		}
 		uCost = roundToTwo(uCost)
 		bCost = roundToTwo(bCost)
 		aCost = roundToTwo(aCost)
+		nuCost = roundToTwo(nuCost)
+		naCost = roundToTwo(naCost)
 		prevUCost = roundToTwo(prevUCost)
 		prevBCost = roundToTwo(prevBCost)
 		prevACost = roundToTwo(prevACost)
+		prevNUCost = roundToTwo(prevNUCost)
+		prevNACost = roundToTwo(prevNACost)
 		dAmount := roundToTwo(uCost - prevUCost)
 		dPct := 0.0
 		if prevUCost > 0 {
@@ -789,15 +864,19 @@ func GenerateMockReport(cfg *config.Config, now time.Time) (*CostReport, error) 
 		}
 
 		totals = TotalCosts{
-			BlendedCost:       bCost,
-			UnblendedCost:     uCost,
-			AmortizedCost:     aCost,
-			PrevUnblendedCost: prevUCost,
-			PrevBlendedCost:   prevBCost,
-			PrevAmortizedCost: prevACost,
-			MoMDeltaAmount:    dAmount,
-			MoMDeltaPercent:   dPct,
-			HasPreviousCost:   cfg.CompareMoM,
+			BlendedCost:          bCost,
+			UnblendedCost:        uCost,
+			AmortizedCost:        aCost,
+			NetUnblendedCost:     nuCost,
+			NetAmortizedCost:     naCost,
+			PrevUnblendedCost:    prevUCost,
+			PrevBlendedCost:      prevBCost,
+			PrevAmortizedCost:    prevACost,
+			PrevNetUnblendedCost: prevNUCost,
+			PrevNetAmortizedCost: prevNACost,
+			MoMDeltaAmount:       dAmount,
+			MoMDeltaPercent:      dPct,
+			HasPreviousCost:      cfg.CompareMoM,
 		}
 	}
 
@@ -1122,22 +1201,30 @@ func applyTopNAggregation(items []LineItem, top int, groupKey string) []LineItem
 		other.UnblendedCost += rem.UnblendedCost
 		other.BlendedCost += rem.BlendedCost
 		other.AmortizedCost += rem.AmortizedCost
+		other.NetUnblendedCost += rem.NetUnblendedCost
+		other.NetAmortizedCost += rem.NetAmortizedCost
 		if rem.HasPreviousCost {
 			hasPrev = true
 			other.PrevUnblendedCost += rem.PrevUnblendedCost
 			other.PrevBlendedCost += rem.PrevBlendedCost
 			other.PrevAmortizedCost += rem.PrevAmortizedCost
+			other.PrevNetUnblendedCost += rem.PrevNetUnblendedCost
+			other.PrevNetAmortizedCost += rem.PrevNetAmortizedCost
 		}
 	}
 
 	other.UnblendedCost = roundToTwo(other.UnblendedCost)
 	other.BlendedCost = roundToTwo(other.BlendedCost)
 	other.AmortizedCost = roundToTwo(other.AmortizedCost)
+	other.NetUnblendedCost = roundToTwo(other.NetUnblendedCost)
+	other.NetAmortizedCost = roundToTwo(other.NetAmortizedCost)
 	if hasPrev {
 		other.HasPreviousCost = true
 		other.PrevUnblendedCost = roundToTwo(other.PrevUnblendedCost)
 		other.PrevBlendedCost = roundToTwo(other.PrevBlendedCost)
 		other.PrevAmortizedCost = roundToTwo(other.PrevAmortizedCost)
+		other.PrevNetUnblendedCost = roundToTwo(other.PrevNetUnblendedCost)
+		other.PrevNetAmortizedCost = roundToTwo(other.PrevNetAmortizedCost)
 		other.MoMDeltaAmount = roundToTwo(other.UnblendedCost - other.PrevUnblendedCost)
 		if other.PrevUnblendedCost > 0 {
 			other.MoMDeltaPercent = roundToTwo(((other.UnblendedCost - other.PrevUnblendedCost) / other.PrevUnblendedCost) * 100.0)

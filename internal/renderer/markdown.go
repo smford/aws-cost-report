@@ -52,14 +52,32 @@ func RenderMarkdown(w io.Writer, r *awsclient.CostReport, writeJobSummary bool, 
 		b.WriteString(fmt.Sprintf("| **Blended Cost** | **%s%.2f** | %s%.2f | %s | %s |\n",
 			sym, r.Totals.BlendedCost, sym, r.Totals.PrevBlendedCost, formatCurrencyDelta(blendedDelta, sym), formatPercentDelta(calcPercent(r.Totals.BlendedCost, r.Totals.PrevBlendedCost))))
 		amortDelta := r.Totals.AmortizedCost - r.Totals.PrevAmortizedCost
-		b.WriteString(fmt.Sprintf("| **Amortized Cost** | **%s%.2f** | %s%.2f | %s | %s |\n\n",
+		b.WriteString(fmt.Sprintf("| **Amortized Cost** | **%s%.2f** | %s%.2f | %s | %s |\n",
 			sym, r.Totals.AmortizedCost, sym, r.Totals.PrevAmortizedCost, formatCurrencyDelta(amortDelta, sym), formatPercentDelta(calcPercent(r.Totals.AmortizedCost, r.Totals.PrevAmortizedCost))))
+		if r.Totals.NetUnblendedCost > 0 || r.Totals.PrevNetUnblendedCost > 0 {
+			netDelta := r.Totals.NetUnblendedCost - r.Totals.PrevNetUnblendedCost
+			b.WriteString(fmt.Sprintf("| **Net Unblended Cost** | **%s%.2f** | %s%.2f | %s | %s |\n",
+				sym, r.Totals.NetUnblendedCost, sym, r.Totals.PrevNetUnblendedCost, formatCurrencyDelta(netDelta, sym), formatPercentDelta(calcPercent(r.Totals.NetUnblendedCost, r.Totals.PrevNetUnblendedCost))))
+		}
+		if r.Totals.NetAmortizedCost > 0 || r.Totals.PrevNetAmortizedCost > 0 {
+			netAmortDelta := r.Totals.NetAmortizedCost - r.Totals.PrevNetAmortizedCost
+			b.WriteString(fmt.Sprintf("| **Net Amortized Cost** | **%s%.2f** | %s%.2f | %s | %s |\n",
+				sym, r.Totals.NetAmortizedCost, sym, r.Totals.PrevNetAmortizedCost, formatCurrencyDelta(netAmortDelta, sym), formatPercentDelta(calcPercent(r.Totals.NetAmortizedCost, r.Totals.PrevNetAmortizedCost))))
+		}
+		b.WriteString("\n")
 	} else {
 		b.WriteString("| Metric | Amount (" + r.Metadata.Currency + ") |\n")
 		b.WriteString("|:---|---:|\n")
 		b.WriteString(fmt.Sprintf("| **Blended Cost** | %s%.2f |\n", sym, r.Totals.BlendedCost))
 		b.WriteString(fmt.Sprintf("| **Unblended Cost** | %s%.2f |\n", sym, r.Totals.UnblendedCost))
-		b.WriteString(fmt.Sprintf("| **Amortized Cost** | %s%.2f |\n\n", sym, r.Totals.AmortizedCost))
+		b.WriteString(fmt.Sprintf("| **Amortized Cost** | %s%.2f |\n", sym, r.Totals.AmortizedCost))
+		if r.Totals.NetUnblendedCost > 0 {
+			b.WriteString(fmt.Sprintf("| **Net Unblended Cost** | %s%.2f |\n", sym, r.Totals.NetUnblendedCost))
+		}
+		if r.Totals.NetAmortizedCost > 0 {
+			b.WriteString(fmt.Sprintf("| **Net Amortized Cost** | %s%.2f |\n", sym, r.Totals.NetAmortizedCost))
+		}
+		b.WriteString("\n")
 	}
 
 	// Service/Dimension Breakdown Table

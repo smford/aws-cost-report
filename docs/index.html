@@ -429,6 +429,14 @@ aws-cost-report generate --compare \
   --output="s3://my-billing-bucket/cost-report.md" \
   --json-summary="s3://my-billing-bucket/cost-summary.json"</code></pre>
 
+      <h3>Enterprise Discount Program (EDP) & Net Cost Metrics</h3>
+      <p>For accounts with AWS Enterprise Discount Program (EDP) or private pricing agreements, query net metrics:</p>
+      <pre><code># Query EDP net metrics alongside standard unblended costs:
+aws-cost-report generate --compare --metrics="UnblendedCost,NetUnblendedCost,NetAmortizedCost"
+
+# Or query all supported metrics at once:
+aws-cost-report generate --compare --metrics=all</code></pre>
+
       <h3>SRE Workflow with Threshold Outputs</h3>
       <pre><code>- name: Run AWS Cost Report
   id: cost

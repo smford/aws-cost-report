@@ -405,6 +405,17 @@ aws-cost-report generate --compare \
 aws-cost-report generate --output="report.csv" --format=csv --s3-bucket="my-billing-reports" --s3-key="csv/2026-10.csv"
 ```
 
+### 18. Enterprise Discount Program (EDP) & Net Cost Metrics
+For AWS accounts with negotiated Enterprise Discount Programs (EDP) or private pricing agreements, `aws-cost-report` supports AWS Cost Explorer net metrics (`NetUnblendedCost` and `NetAmortizedCost`):
+
+```bash
+# Query net discount metrics alongside standard costs:
+aws-cost-report generate --compare --metrics="UnblendedCost,NetUnblendedCost,NetAmortizedCost"
+
+# Or query all supported metrics at once:
+aws-cost-report generate --compare --metrics=all
+```
+
 ---
 
 ## GitHub Action
@@ -677,6 +688,7 @@ To run `aws-cost-report`, the executing IAM principal requires read permissions 
 | `--months` | | `1` | Number of previous complete months to analyze |
 | `--start` | | | Explicit billing start date (`YYYY-MM-01` or `YYYY-MM-DD`, inclusive) |
 | `--end` | | | Explicit billing end date (`YYYY-MM-01` or `YYYY-MM-DD`, inclusive) |
+| `--metrics` | | `UnblendedCost,BlendedCost,AmortizedCost` | Comma-separated cost metrics (`UnblendedCost`, `BlendedCost`, `AmortizedCost`, `NetUnblendedCost`, `NetAmortizedCost`, or `all` for EDP pricing) |
 | `--group-by` | | `SERVICE` | Grouping dimension(s), up to 2 comma-separated (`SERVICE`, `LINKED_ACCOUNT`, `TAG:<Key>`) |
 | `--name` | `--account-name` | | Human-readable name or alias for the AWS account (e.g. `Production Core`) |
 | `--threshold` | | `0.00` | SRE budget alert dollar threshold. Exits with code 1 if exceeded |

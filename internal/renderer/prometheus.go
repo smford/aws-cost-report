@@ -46,6 +46,18 @@ func RenderPrometheus(w io.Writer, r *awsclient.CostReport, threshold float64, v
 	sb.WriteString("# TYPE aws_cost_report_total_amortized_dollars gauge\n")
 	sb.WriteString(fmt.Sprintf("aws_cost_report_total_amortized_dollars{%s} %.2f\n", labels, r.Totals.AmortizedCost))
 
+	if r.Totals.NetUnblendedCost > 0 {
+		sb.WriteString("# HELP aws_cost_report_total_net_unblended_dollars Total net unblended cost reflecting EDP discounts\n")
+		sb.WriteString("# TYPE aws_cost_report_total_net_unblended_dollars gauge\n")
+		sb.WriteString(fmt.Sprintf("aws_cost_report_total_net_unblended_dollars{%s} %.2f\n", labels, r.Totals.NetUnblendedCost))
+	}
+
+	if r.Totals.NetAmortizedCost > 0 {
+		sb.WriteString("# HELP aws_cost_report_total_net_amortized_dollars Total net amortized cost reflecting EDP discounts\n")
+		sb.WriteString("# TYPE aws_cost_report_total_net_amortized_dollars gauge\n")
+		sb.WriteString(fmt.Sprintf("aws_cost_report_total_net_amortized_dollars{%s} %.2f\n", labels, r.Totals.NetAmortizedCost))
+	}
+
 	if r.HasComparison {
 		sb.WriteString("# HELP aws_cost_report_previous_total_unblended_dollars Previous period total unblended cost\n")
 		sb.WriteString("# TYPE aws_cost_report_previous_total_unblended_dollars gauge\n")

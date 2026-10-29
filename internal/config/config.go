@@ -249,7 +249,7 @@ func LoadConfig(args []string) (*Config, error) {
 		months       = fs.Int("months", 0, "Query historical full months back (default: 1)")
 		start        = fs.String("start", "", "Explicit start date (YYYY-MM-01)")
 		end          = fs.String("end", "", "Explicit end date (YYYY-MM-01 or YYYY-MM-DD)")
-		metricsFlag  = fs.String("metrics", "", "Comma-separated metrics (UnblendedCost,BlendedCost,AmortizedCost or all)")
+		metricsFlag  = fs.String("metrics", "", "Comma-separated metrics (UnblendedCost, BlendedCost, AmortizedCost, NetUnblendedCost, NetAmortizedCost, or all)")
 		groupBy      = fs.String("group-by", "", "Grouping dimension(s), up to 2 comma-separated (SERVICE, LINKED_ACCOUNT, TAG:<Key>)")
 		minCost      = fs.Float64("min-cost", -1.0, "Minimum display cost threshold (e.g. 0.01)")
 		compareMoM   = fs.Bool("compare", false, "Compare Month-over-Month with preceding period")
@@ -357,13 +357,27 @@ func LoadConfig(args []string) (*Config, error) {
 
 	if *metricsFlag != "" {
 		if strings.EqualFold(*metricsFlag, "all") {
-			cfg.Defaults.Metrics = []string{"UnblendedCost", "BlendedCost", "AmortizedCost"}
+			cfg.Defaults.Metrics = []string{"UnblendedCost", "BlendedCost", "AmortizedCost", "NetUnblendedCost", "NetAmortizedCost"}
 		} else {
 			parts := strings.Split(*metricsFlag, ",")
 			var cleaned []string
 			for _, p := range parts {
 				trimmed := strings.TrimSpace(p)
-				if trimmed != "" {
+				if trimmed == "" {
+					continue
+				}
+				switch strings.ToLower(trimmed) {
+				case "unblendedcost", "unblended":
+					cleaned = append(cleaned, "UnblendedCost")
+				case "blendedcost", "blended":
+					cleaned = append(cleaned, "BlendedCost")
+				case "amortizedcost", "amortized":
+					cleaned = append(cleaned, "AmortizedCost")
+				case "netunblendedcost", "netunblended", "net_unblended":
+					cleaned = append(cleaned, "NetUnblendedCost")
+				case "netamortizedcost", "netamortized", "net_amortized":
+					cleaned = append(cleaned, "NetAmortizedCost")
+				default:
 					cleaned = append(cleaned, trimmed)
 				}
 			}

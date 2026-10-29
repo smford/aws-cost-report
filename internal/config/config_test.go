@@ -442,3 +442,32 @@ func TestTwoDimensionalGroupByConfig(t *testing.T) {
 		t.Error("expected error when > 2 dimensions specified, got nil")
 	}
 }
+
+func TestConfigNetMetrics(t *testing.T) {
+	// 1. Explicit net metrics
+	cfg, err := LoadConfig([]string{"--metrics", "NetUnblendedCost,NetAmortizedCost"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(cfg.Defaults.Metrics) != 2 || cfg.Defaults.Metrics[0] != "NetUnblendedCost" || cfg.Defaults.Metrics[1] != "NetAmortizedCost" {
+		t.Errorf("unexpected metrics: %+v", cfg.Defaults.Metrics)
+	}
+
+	// 2. Short aliases
+	cfg2, err := LoadConfig([]string{"--metrics", "net_unblended,net_amortized"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(cfg2.Defaults.Metrics) != 2 || cfg2.Defaults.Metrics[0] != "NetUnblendedCost" || cfg2.Defaults.Metrics[1] != "NetAmortizedCost" {
+		t.Errorf("unexpected metrics: %+v", cfg2.Defaults.Metrics)
+	}
+
+	// 3. "all" keyword includes net metrics
+	cfg3, err := LoadConfig([]string{"--metrics", "all"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(cfg3.Defaults.Metrics) != 5 {
+		t.Errorf("expected 5 metrics for 'all', got %d: %+v", len(cfg3.Defaults.Metrics), cfg3.Defaults.Metrics)
+	}
+}

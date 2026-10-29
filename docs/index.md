@@ -243,3 +243,17 @@ aws-cost-report generate --compare \
 # Specify target bucket with relative output path
 aws-cost-report generate --output="monthly-report.csv" --format=csv --s3-bucket="my-billing-bucket"
 ```
+
+---
+
+## Enterprise Discount Program (EDP) & Net Cost Metrics
+
+For accounts with AWS Enterprise Discount Program (EDP) discounts or private pricing agreements, query net metrics:
+
+```bash
+# Query net discount metrics alongside standard costs:
+aws-cost-report generate --compare --metrics="UnblendedCost,NetUnblendedCost,NetAmortizedCost"
+
+# Or query all supported metrics at once:
+aws-cost-report generate --compare --metrics=all
+```

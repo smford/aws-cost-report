@@ -4,16 +4,20 @@ import "strings"
 
 // LineItem represents aggregated billing data for a single group (e.g. AWS service or linked account).
 type LineItem struct {
-	Name              string  `json:"name"`
-	UnblendedCost     float64 `json:"unblended_cost"`
-	BlendedCost       float64 `json:"blended_cost"`
-	AmortizedCost     float64 `json:"amortized_cost"`
-	PrevUnblendedCost float64 `json:"prev_unblended_cost,omitempty"`
-	PrevBlendedCost   float64 `json:"prev_blended_cost,omitempty"`
-	PrevAmortizedCost float64 `json:"prev_amortized_cost,omitempty"`
-	MoMDeltaAmount    float64 `json:"mom_delta_amount,omitempty"`
-	MoMDeltaPercent   float64 `json:"mom_delta_percent,omitempty"`
-	HasPreviousCost   bool    `json:"has_previous_cost,omitempty"`
+	Name                 string  `json:"name"`
+	UnblendedCost        float64 `json:"unblended_cost"`
+	BlendedCost          float64 `json:"blended_cost"`
+	AmortizedCost        float64 `json:"amortized_cost"`
+	NetUnblendedCost     float64 `json:"net_unblended_cost,omitempty"`
+	NetAmortizedCost     float64 `json:"net_amortized_cost,omitempty"`
+	PrevUnblendedCost    float64 `json:"prev_unblended_cost,omitempty"`
+	PrevBlendedCost      float64 `json:"prev_blended_cost,omitempty"`
+	PrevAmortizedCost    float64 `json:"prev_amortized_cost,omitempty"`
+	PrevNetUnblendedCost float64 `json:"prev_net_unblended_cost,omitempty"`
+	PrevNetAmortizedCost float64 `json:"prev_net_amortized_cost,omitempty"`
+	MoMDeltaAmount       float64 `json:"mom_delta_amount,omitempty"`
+	MoMDeltaPercent      float64 `json:"mom_delta_percent,omitempty"`
+	HasPreviousCost      bool    `json:"has_previous_cost,omitempty"`
 }
 
 // ReportMetadata contains contextual details about the generated cost report.
@@ -34,15 +38,19 @@ type ReportMetadata struct {
 
 // TotalCosts encapsulates aggregate metrics across all active services.
 type TotalCosts struct {
-	UnblendedCost     float64 `json:"unblended_cost"`
-	BlendedCost       float64 `json:"blended_cost"`
-	AmortizedCost     float64 `json:"amortized_cost"`
-	PrevUnblendedCost float64 `json:"prev_unblended_cost,omitempty"`
-	PrevBlendedCost   float64 `json:"prev_blended_cost,omitempty"`
-	PrevAmortizedCost float64 `json:"prev_amortized_cost,omitempty"`
-	MoMDeltaAmount    float64 `json:"mom_delta_amount,omitempty"`
-	MoMDeltaPercent   float64 `json:"mom_delta_percent,omitempty"`
-	HasPreviousCost   bool    `json:"has_previous_cost,omitempty"`
+	UnblendedCost        float64 `json:"unblended_cost"`
+	BlendedCost          float64 `json:"blended_cost"`
+	AmortizedCost        float64 `json:"amortized_cost"`
+	NetUnblendedCost     float64 `json:"net_unblended_cost,omitempty"`
+	NetAmortizedCost     float64 `json:"net_amortized_cost,omitempty"`
+	PrevUnblendedCost    float64 `json:"prev_unblended_cost,omitempty"`
+	PrevBlendedCost      float64 `json:"prev_blended_cost,omitempty"`
+	PrevAmortizedCost    float64 `json:"prev_amortized_cost,omitempty"`
+	PrevNetUnblendedCost float64 `json:"prev_net_unblended_cost,omitempty"`
+	PrevNetAmortizedCost float64 `json:"prev_net_amortized_cost,omitempty"`
+	MoMDeltaAmount       float64 `json:"mom_delta_amount,omitempty"`
+	MoMDeltaPercent      float64 `json:"mom_delta_percent,omitempty"`
+	HasPreviousCost      bool    `json:"has_previous_cost,omitempty"`
 }
 
 // MonthlyBucket represents a single month column in a multi-month breakdown.

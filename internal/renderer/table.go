@@ -69,12 +69,33 @@ func RenderTable(w io.Writer, r *awsclient.CostReport, noColor bool) error {
 		amortDiffStr := colorize(amortDiff, formatTableDiff(amortDiff, 16), noColor)
 		amortPctStr := colorize(amortPct, formatTablePct(amortPct, 16), noColor)
 		b.WriteString(fmt.Sprintf(" %-24s | %18.2f | %17.2f | %s | %s\n", "Amortized Cost", r.Totals.AmortizedCost, r.Totals.PrevAmortizedCost, amortDiffStr, amortPctStr))
+
+		if r.Totals.NetUnblendedCost > 0 || r.Totals.PrevNetUnblendedCost > 0 {
+			netDiff := r.Totals.NetUnblendedCost - r.Totals.PrevNetUnblendedCost
+			netPct := calcPercent(r.Totals.NetUnblendedCost, r.Totals.PrevNetUnblendedCost)
+			netDiffStr := colorize(netDiff, formatTableDiff(netDiff, 16), noColor)
+			netPctStr := colorize(netPct, formatTablePct(netPct, 16), noColor)
+			b.WriteString(fmt.Sprintf(" %-24s | %18.2f | %17.2f | %s | %s\n", "Net Unblended Cost", r.Totals.NetUnblendedCost, r.Totals.PrevNetUnblendedCost, netDiffStr, netPctStr))
+		}
+		if r.Totals.NetAmortizedCost > 0 || r.Totals.PrevNetAmortizedCost > 0 {
+			netAmortDiff := r.Totals.NetAmortizedCost - r.Totals.PrevNetAmortizedCost
+			netAmortPct := calcPercent(r.Totals.NetAmortizedCost, r.Totals.PrevNetAmortizedCost)
+			netAmortDiffStr := colorize(netAmortDiff, formatTableDiff(netAmortDiff, 16), noColor)
+			netAmortPctStr := colorize(netAmortPct, formatTablePct(netAmortPct, 16), noColor)
+			b.WriteString(fmt.Sprintf(" %-24s | %18.2f | %17.2f | %s | %s\n", "Net Amortized Cost", r.Totals.NetAmortizedCost, r.Totals.PrevNetAmortizedCost, netAmortDiffStr, netAmortPctStr))
+		}
 	} else {
 		b.WriteString(fmt.Sprintf(" %-18s | %18s\n", "Metric", "Amount ("+r.Metadata.Currency+")"))
 		b.WriteString(divSingle + "\n")
 		b.WriteString(fmt.Sprintf(" %-18s | %18.2f\n", "Blended Cost", r.Totals.BlendedCost))
 		b.WriteString(fmt.Sprintf(" %-18s | %18.2f\n", "Unblended Cost", r.Totals.UnblendedCost))
 		b.WriteString(fmt.Sprintf(" %-18s | %18.2f\n", "Amortized Cost", r.Totals.AmortizedCost))
+		if r.Totals.NetUnblendedCost > 0 {
+			b.WriteString(fmt.Sprintf(" %-18s | %18.2f\n", "Net Unblended Cost", r.Totals.NetUnblendedCost))
+		}
+		if r.Totals.NetAmortizedCost > 0 {
+			b.WriteString(fmt.Sprintf(" %-18s | %18.2f\n", "Net Amortized Cost", r.Totals.NetAmortizedCost))
+		}
 	}
 	b.WriteString(divDouble + "\n\n")
 
