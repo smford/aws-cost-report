@@ -31,33 +31,33 @@ func RenderTable(w io.Writer, r *awsclient.CostReport, noColor bool) error {
 	b.WriteString(fmt.Sprintf(" Period:             %s to %s (inclusive)\n", r.Metadata.PeriodStart, r.Metadata.PeriodEnd))
 	b.WriteString(fmt.Sprintf(" Currency:           %s\n", r.Metadata.Currency))
 	b.WriteString(fmt.Sprintf(" Estimated / Final:  %s\n", r.Metadata.EstimatedOrFinal))
-	groupLabel := r.Metadata.GroupKey
-	if groupLabel == "" {
-		groupLabel = "Services"
+	groupLabel := "Services"
+	if r.Metadata.GroupKey != "" && !strings.EqualFold(r.Metadata.GroupKey, "SERVICE") {
+		groupLabel = r.Metadata.GroupKey
 	}
 	b.WriteString(fmt.Sprintf(" Active %-12s %d\n", groupLabel+":", r.Metadata.ActiveServices))
 
 	// Totals summary section
 	b.WriteString(divSingle + "\n")
 	if r.HasComparison {
-		b.WriteString(fmt.Sprintf(" %-18s | %18s | %18s | %18s | %16s\n", "Metric", "Amount ("+r.Metadata.Currency+")", "Prev ("+r.Metadata.Currency+")", "Diff ($)", "% Δ"))
+		b.WriteString(fmt.Sprintf(" %-24s | %18s | %17s | %16s | %16s\n", "Metric", "Amount ("+r.Metadata.Currency+")", "Prev ("+r.Metadata.Currency+")", "Diff ($)", "% Δ"))
 		b.WriteString(divSingle + "\n")
 
-		unblendedDiffStr := colorize(r.Totals.MoMDeltaAmount, fmt.Sprintf("%18.2f", r.Totals.MoMDeltaAmount), noColor)
-		unblendedPctStr := colorize(r.Totals.MoMDeltaPercent, fmt.Sprintf("%15.2f%%", r.Totals.MoMDeltaPercent), noColor)
-		b.WriteString(fmt.Sprintf(" %-18s | %18.2f | %18.2f | %s | %s\n", "Unblended Cost", r.Totals.UnblendedCost, r.Totals.PrevUnblendedCost, unblendedDiffStr, unblendedPctStr))
+		unblendedDiffStr := colorize(r.Totals.MoMDeltaAmount, fmt.Sprintf("%+16.2f", r.Totals.MoMDeltaAmount), noColor)
+		unblendedPctStr := colorize(r.Totals.MoMDeltaPercent, fmt.Sprintf("%+15.2f%%", r.Totals.MoMDeltaPercent), noColor)
+		b.WriteString(fmt.Sprintf(" %-24s | %18.2f | %17.2f | %s | %s\n", "Unblended Cost", r.Totals.UnblendedCost, r.Totals.PrevUnblendedCost, unblendedDiffStr, unblendedPctStr))
 
 		blendedDiff := r.Totals.BlendedCost - r.Totals.PrevBlendedCost
 		blendedPct := calcPercent(r.Totals.BlendedCost, r.Totals.PrevBlendedCost)
-		blendedDiffStr := colorize(blendedDiff, fmt.Sprintf("%18.2f", blendedDiff), noColor)
-		blendedPctStr := colorize(blendedPct, fmt.Sprintf("%15.2f%%", blendedPct), noColor)
-		b.WriteString(fmt.Sprintf(" %-18s | %18.2f | %18.2f | %s | %s\n", "Blended Cost", r.Totals.BlendedCost, r.Totals.PrevBlendedCost, blendedDiffStr, blendedPctStr))
+		blendedDiffStr := colorize(blendedDiff, fmt.Sprintf("%+16.2f", blendedDiff), noColor)
+		blendedPctStr := colorize(blendedPct, fmt.Sprintf("%+15.2f%%", blendedPct), noColor)
+		b.WriteString(fmt.Sprintf(" %-24s | %18.2f | %17.2f | %s | %s\n", "Blended Cost", r.Totals.BlendedCost, r.Totals.PrevBlendedCost, blendedDiffStr, blendedPctStr))
 
 		amortDiff := r.Totals.AmortizedCost - r.Totals.PrevAmortizedCost
 		amortPct := calcPercent(r.Totals.AmortizedCost, r.Totals.PrevAmortizedCost)
-		amortDiffStr := colorize(amortDiff, fmt.Sprintf("%18.2f", amortDiff), noColor)
-		amortPctStr := colorize(amortPct, fmt.Sprintf("%15.2f%%", amortPct), noColor)
-		b.WriteString(fmt.Sprintf(" %-18s | %18.2f | %18.2f | %s | %s\n", "Amortized Cost", r.Totals.AmortizedCost, r.Totals.PrevAmortizedCost, amortDiffStr, amortPctStr))
+		amortDiffStr := colorize(amortDiff, fmt.Sprintf("%+16.2f", amortDiff), noColor)
+		amortPctStr := colorize(amortPct, fmt.Sprintf("%+15.2f%%", amortPct), noColor)
+		b.WriteString(fmt.Sprintf(" %-24s | %18.2f | %17.2f | %s | %s\n", "Amortized Cost", r.Totals.AmortizedCost, r.Totals.PrevAmortizedCost, amortDiffStr, amortPctStr))
 	} else {
 		b.WriteString(fmt.Sprintf(" %-18s | %18s\n", "Metric", "Amount ("+r.Metadata.Currency+")"))
 		b.WriteString(divSingle + "\n")
@@ -75,26 +75,17 @@ func RenderTable(w io.Writer, r *awsclient.CostReport, noColor bool) error {
 	}
 
 	if r.HasComparison {
-		b.WriteString(fmt.Sprintf(" %-46s | %16s | %16s | %10s | %8s\n", truncate(headerCol, 46), "Unblended ("+r.Metadata.Currency+")", "Prev ("+r.Metadata.Currency+")", "Diff ($)", "% Δ"))
+		b.WriteString(fmt.Sprintf(" %-42s | %15s | %14s | %10s | %10s\n", truncate(headerCol, 42), "Unblended ("+r.Metadata.Currency+")", "Prev ("+r.Metadata.Currency+")", "Diff ($)", "% Δ"))
 		b.WriteString(divSingle + "\n")
 		for _, item := range r.Items {
-			diffSign := "+"
-			if item.MoMDeltaAmount < 0 {
-				diffSign = ""
-			}
-			pctSign := "+"
-			if item.MoMDeltaPercent < 0 {
-				pctSign = ""
-			}
+			diffStr := fmt.Sprintf("%+10.2f", item.MoMDeltaAmount)
+			pctStr := fmt.Sprintf("%+9.2f%%", item.MoMDeltaPercent)
 
-			rawDiff := fmt.Sprintf("%9s%0.2f", diffSign, item.MoMDeltaAmount)
-			rawPct := fmt.Sprintf("%7s%0.2f%%", pctSign, item.MoMDeltaPercent)
+			coloredDiff := colorize(item.MoMDeltaAmount, diffStr, noColor)
+			coloredPct := colorize(item.MoMDeltaPercent, pctStr, noColor)
 
-			coloredDiff := colorize(item.MoMDeltaAmount, rawDiff, noColor)
-			coloredPct := colorize(item.MoMDeltaPercent, rawPct, noColor)
-
-			b.WriteString(fmt.Sprintf(" %-46s | %16.2f | %16.2f | %s | %s\n",
-				truncate(item.Name, 46),
+			b.WriteString(fmt.Sprintf(" %-42s | %15.2f | %14.2f | %s | %s\n",
+				truncate(item.Name, 42),
 				item.UnblendedCost,
 				item.PrevUnblendedCost,
 				coloredDiff,

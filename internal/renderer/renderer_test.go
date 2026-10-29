@@ -54,6 +54,21 @@ func TestRenderTableWithComparison(t *testing.T) {
 	if !strings.Contains(out, "Diff ($)") || !strings.Contains(out, "% Δ") {
 		t.Errorf("expected comparison columns in table output")
 	}
+
+	// Verify exact line length alignment (104 characters for dividers, headers, and rows)
+	lines := strings.Split(out, "\n")
+	for i, line := range lines {
+		if strings.HasPrefix(line, "====") || strings.HasPrefix(line, "----") {
+			if len(line) != 104 {
+				t.Errorf("line %d: expected divider length 104, got %d", i, len(line))
+			}
+		}
+		if strings.Contains(line, "Unblended Cost") || strings.Contains(line, "Amazon DynamoDB") {
+			if len(line) != 104 {
+				t.Errorf("line %d: expected row length 104, got %d", i, len(line))
+			}
+		}
+	}
 }
 
 func TestRenderTableColors(t *testing.T) {
