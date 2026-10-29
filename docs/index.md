@@ -51,7 +51,7 @@ jobs:
 | `compare` | Enable Month-over-Month comparison | `true` |
 | `format` | Output format (`markdown`, `table`, `json`, `csv`) | `markdown` |
 | `filter` | Filter services by official name, alias, or substring | `""` |
-| `group-by` | Grouping dimension (`SERVICE`, `LINKED_ACCOUNT`, `TAG:<Key>`) | `SERVICE` |
+| `group-by` | Grouping dimension(s), up to 2 comma-separated (`SERVICE`, `LINKED_ACCOUNT`, `TAG:<Key>`) | `SERVICE` |
 | `name` | Human-readable name or alias for the AWS account (e.g. `Production Core`) | `""` |
 | `tag` | Filter costs by AWS Cost Allocation Tag (e.g. `Environment=Production`) | `""` |
 | `threshold` | Budget threshold dollar amount | `""` |
@@ -112,6 +112,11 @@ aws-cost-report generate --tag="Environment=Production" --tag="Project=FinOps"
 # Combine tag filtering with account or secondary tag grouping
 aws-cost-report generate --tag="Environment=Production" --group-by="LINKED_ACCOUNT"
 aws-cost-report generate --tag="Environment=Production" --group-by="TAG:Owner"
+
+# Two-Dimensional Grouping (combine up to 2 dimensions)
+aws-cost-report generate --group-by="SERVICE,TAG:Environment"
+aws-cost-report generate --group-by="LINKED_ACCOUNT,SERVICE"
+aws-cost-report generate --group-by="TAG:Environment,TAG:Team"
 
 # Identify untagged resource costs for a specific tag
 aws-cost-report generate --group-by="TAG:Environment" --filter="Untagged" --compare

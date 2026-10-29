@@ -401,3 +401,44 @@ s3_key: "reports/yaml.md"
 		t.Errorf("expected S3Key 'reports/yaml.md', got %s", cfg2.S3Key)
 	}
 }
+
+func TestTwoDimensionalGroupByConfig(t *testing.T) {
+	// Single dimension
+	cfg1, err := LoadConfig([]string{"--group-by", "SERVICE"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(cfg1.Groupings) != 1 || cfg1.Groupings[0].Key != "SERVICE" || cfg1.Groupings[0].Type != "DIMENSION" {
+		t.Errorf("expected 1 dimension SERVICE, got %+v", cfg1.Groupings)
+	}
+
+	// Two dimensions: Dimension + Tag
+	cfg2, err := LoadConfig([]string{"--group-by", "SERVICE,TAG:Environment"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(cfg2.Groupings) != 2 {
+		t.Fatalf("expected 2 groupings, got %d", len(cfg2.Groupings))
+	}
+	if cfg2.Groupings[0].Type != "DIMENSION" || cfg2.Groupings[0].Key != "SERVICE" {
+		t.Errorf("unexpected grouping 0: %+v", cfg2.Groupings[0])
+	}
+	if cfg2.Groupings[1].Type != "TAG" || cfg2.Groupings[1].Key != "Environment" {
+		t.Errorf("unexpected grouping 1: %+v", cfg2.Groupings[1])
+	}
+
+	// Two dimensions: Linked Account + Service
+	cfg3, err := LoadConfig([]string{"--group-by", "LINKED_ACCOUNT,SERVICE"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(cfg3.Groupings) != 2 || cfg3.Groupings[0].Key != "LINKED_ACCOUNT" || cfg3.Groupings[1].Key != "SERVICE" {
+		t.Errorf("unexpected groupings: %+v", cfg3.Groupings)
+	}
+
+	// More than 2 dimensions should fail
+	_, err = LoadConfig([]string{"--group-by", "SERVICE,TAG:Environment,TAG:Team"})
+	if err == nil {
+		t.Error("expected error when > 2 dimensions specified, got nil")
+	}
+}

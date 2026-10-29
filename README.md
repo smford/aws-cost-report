@@ -227,8 +227,8 @@ tag_filters:
   Project: "FinOps"
 ```
 
-### 7. Group by Tag or Linked Account
-Break down costs by environment, team, or AWS Organization linked account:
+### 7. Multi-Dimensional Grouping (Single or Two-Dimensional)
+Break down costs by environment, team, or AWS Organization linked account, or combine up to two dimensions simultaneously (supported natively by AWS Cost Explorer):
 
 ```bash
 # Group by Cost Allocation Tag
@@ -236,6 +236,15 @@ aws-cost-report generate --group-by="TAG:Environment"
 
 # Group by Linked Account (supports friendly name mapping in config.yaml)
 aws-cost-report generate --group-by="LINKED_ACCOUNT"
+
+# Two-Dimensional Grouping: Service + Tag (e.g. Amazon EC2 [Environment=Production])
+aws-cost-report generate --group-by="SERVICE,TAG:Environment"
+
+# Two-Dimensional Grouping: Linked Account + Service
+aws-cost-report generate --group-by="LINKED_ACCOUNT,SERVICE"
+
+# Two-Dimensional Grouping: Two Tags (Environment + Team)
+aws-cost-report generate --group-by="TAG:Environment,TAG:Team"
 ```
 
 ### 8. How to Identify Untagged Costs
@@ -444,7 +453,7 @@ jobs:
 | `months` | Number of historical months back to query | `1` | No |
 | `start` | Explicit billing start date (`YYYY-MM-01` or `YYYY-MM-DD`) | `""` | No |
 | `end` | Explicit billing end date (`YYYY-MM-01` or `YYYY-MM-DD`) | `""` | No |
-| `group-by` | Grouping dimension (`SERVICE`, `LINKED_ACCOUNT`, or `TAG:<Key>`) | `SERVICE` | No |
+| `group-by` | Grouping dimension(s), up to 2 comma-separated (`SERVICE`, `LINKED_ACCOUNT`, `TAG:<Key>`) | `SERVICE` | No |
 | `name` | Human-readable name or alias for the AWS account (e.g. `Production Core`) | `""` | No |
 | `account-name` | Alias for `name` | `""` | No |
 | `filter` | Comma-separated substring filter for services (e.g. `DynamoDB,Lambda`) | `""` | No |
@@ -668,7 +677,7 @@ To run `aws-cost-report`, the executing IAM principal requires read permissions 
 | `--months` | | `1` | Number of previous complete months to analyze |
 | `--start` | | | Explicit billing start date (`YYYY-MM-01` or `YYYY-MM-DD`, inclusive) |
 | `--end` | | | Explicit billing end date (`YYYY-MM-01` or `YYYY-MM-DD`, inclusive) |
-| `--group-by` | | `SERVICE` | Grouping dimension (`SERVICE`, `LINKED_ACCOUNT`) or `TAG:<Key>` |
+| `--group-by` | | `SERVICE` | Grouping dimension(s), up to 2 comma-separated (`SERVICE`, `LINKED_ACCOUNT`, `TAG:<Key>`) |
 | `--name` | `--account-name` | | Human-readable name or alias for the AWS account (e.g. `Production Core`) |
 | `--threshold` | | `0.00` | SRE budget alert dollar threshold. Exits with code 1 if exceeded |
 | `--min-cost` | | `0.01` | Minimum cost threshold to display line items |

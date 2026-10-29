@@ -3,6 +3,7 @@ package awsclient
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -806,5 +807,85 @@ func TestMonthlyBreakdownWithTopNAggregation(t *testing.T) {
 	}
 	if lastItem.Total <= 0 {
 		t.Errorf("expected Other Services total > 0, got %f", lastItem.Total)
+	}
+}
+
+func TestFormatGroupKeys(t *testing.T) {
+	accounts := map[string]string{
+		"123456789012": "Prod Core",
+	}
+
+	// 1. Single dimension (Service)
+	serviceGrouping := []config.GroupingConfig{{Type: "DIMENSION", Key: "SERVICE"}}
+	if got := formatGroupKeys([]string{"Amazon DynamoDB"}, serviceGrouping, accounts); got != "Amazon DynamoDB" {
+		t.Errorf("expected 'Amazon DynamoDB', got %q", got)
+	}
+
+	// 2. Single tag (Tagged and Untagged)
+	tagGrouping := []config.GroupingConfig{{Type: "TAG", Key: "Environment"}}
+	if got := formatGroupKeys([]string{"Environment$Production"}, tagGrouping, accounts); got != "Production" {
+		t.Errorf("expected 'Production', got %q", got)
+	}
+	if got := formatGroupKeys([]string{"Environment$"}, tagGrouping, accounts); got != "Untagged / Other" {
+		t.Errorf("expected 'Untagged / Other', got %q", got)
+	}
+
+	// 3. Two dimensions: Service + Tag
+	twoDimGrouping := []config.GroupingConfig{
+		{Type: "DIMENSION", Key: "SERVICE"},
+		{Type: "TAG", Key: "Environment"},
+	}
+	if got := formatGroupKeys([]string{"Amazon EC2", "Environment$Production"}, twoDimGrouping, accounts); got != "Amazon EC2 [Environment=Production]" {
+		t.Errorf("expected 'Amazon EC2 [Environment=Production]', got %q", got)
+	}
+	if got := formatGroupKeys([]string{"Amazon EC2", "Environment$"}, twoDimGrouping, accounts); got != "Amazon EC2 [Environment=Untagged]" {
+		t.Errorf("expected 'Amazon EC2 [Environment=Untagged]', got %q", got)
+	}
+
+	// 4. Two dimensions: Linked Account + Service
+	accountServiceGrouping := []config.GroupingConfig{
+		{Type: "DIMENSION", Key: "LINKED_ACCOUNT"},
+		{Type: "DIMENSION", Key: "SERVICE"},
+	}
+	if got := formatGroupKeys([]string{"123456789012", "Amazon S3"}, accountServiceGrouping, accounts); got != "Prod Core (123456789012) - Amazon S3" {
+		t.Errorf("expected 'Prod Core (123456789012) - Amazon S3', got %q", got)
+	}
+	if got := formatGroupKeys([]string{"999888777666", "Amazon S3"}, accountServiceGrouping, accounts); got != "999888777666 - Amazon S3" {
+		t.Errorf("expected '999888777666 - Amazon S3', got %q", got)
+	}
+
+	// 5. Two tags: Environment + Team
+	twoTagsGrouping := []config.GroupingConfig{
+		{Type: "TAG", Key: "Environment"},
+		{Type: "TAG", Key: "Team"},
+	}
+	if got := formatGroupKeys([]string{"Environment$Production", "Team$Core"}, twoTagsGrouping, accounts); got != "[Environment=Production] [Team=Core]" {
+		t.Errorf("expected '[Environment=Production] [Team=Core]', got %q", got)
+	}
+}
+
+func TestTwoDimensionalGroupByMockReport(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.Groupings = []config.GroupingConfig{
+		{Type: "DIMENSION", Key: "SERVICE"},
+		{Type: "TAG", Key: "Environment"},
+	}
+	cfg.Grouping = cfg.Groupings[0]
+
+	refTime := time.Date(2026, time.October, 28, 12, 0, 0, 0, time.UTC)
+	report, err := GenerateMockReport(cfg, refTime)
+	if err != nil {
+		t.Fatalf("GenerateMockReport failed: %v", err)
+	}
+
+	if report.Metadata.GroupKey != "SERVICE,TAG:Environment" {
+		t.Errorf("expected GroupKey 'SERVICE,TAG:Environment', got %q", report.Metadata.GroupKey)
+	}
+	if len(report.Items) == 0 {
+		t.Fatalf("expected items in report")
+	}
+	firstItem := report.Items[0].Name
+	if !strings.Contains(firstItem, "[Environment=Production]") {
+		t.Errorf("expected item to contain [Environment=Production], got %q", firstItem)
 	}
 }

@@ -337,6 +337,17 @@ aws-cost-report generate --tag="Environment=Production" --tag="Project=FinOps"
 # Combine tag filtering with Linked Account breakdown
 aws-cost-report generate --tag="Environment=Production" --group-by="LINKED_ACCOUNT"</code></pre>
 
+      <h3>Multi-Dimensional Grouping</h3>
+      <p>Group costs by up to two dimensions simultaneously to drill down into costs across accounts, services, and tag dimensions:</p>
+      <pre><code># Service breakdown by Environment tag:
+aws-cost-report generate --group-by="SERVICE,TAG:Environment"
+
+# Linked Account breakdown by Service:
+aws-cost-report generate --group-by="LINKED_ACCOUNT,SERVICE"
+
+# Multi-tag matrix (e.g. Environment + Team):
+aws-cost-report generate --group-by="TAG:Environment,TAG:Team"</code></pre>
+
       <h3>Identifying Untagged Costs</h3>
       <p>When you group costs by an AWS Cost Allocation Tag dimension, AWS Cost Explorer aggregates all resources missing that tag into an empty tag key value. The tool automatically maps this to <code>Untagged / Other</code>.</p>
 

@@ -131,6 +131,7 @@ type Config struct {
 	Version          string            `yaml:"version"`
 	Defaults         DefaultsConfig    `yaml:"defaults"`
 	Grouping         GroupingConfig    `yaml:"grouping"`
+	Groupings        []GroupingConfig  `yaml:"groupings"`
 	Budget           BudgetConfig      `yaml:"budget"`
 	Reporting        ReportingConfig   `yaml:"reporting"`
 	Server           ServerConfig      `yaml:"server"`
@@ -216,6 +217,12 @@ func DefaultConfig() *Config {
 			Type: "DIMENSION",
 			Key:  "SERVICE",
 		},
+		Groupings: []GroupingConfig{
+			{
+				Type: "DIMENSION",
+				Key:  "SERVICE",
+			},
+		},
 		Budget: BudgetConfig{
 			FailOnThreshold: 0.00,
 		},
@@ -243,7 +250,7 @@ func LoadConfig(args []string) (*Config, error) {
 		start        = fs.String("start", "", "Explicit start date (YYYY-MM-01)")
 		end          = fs.String("end", "", "Explicit end date (YYYY-MM-01 or YYYY-MM-DD)")
 		metricsFlag  = fs.String("metrics", "", "Comma-separated metrics (UnblendedCost,BlendedCost,AmortizedCost or all)")
-		groupBy      = fs.String("group-by", "", "Grouping dimension (SERVICE, LINKED_ACCOUNT) or TAG:<Key>")
+		groupBy      = fs.String("group-by", "", "Grouping dimension(s), up to 2 comma-separated (SERVICE, LINKED_ACCOUNT, TAG:<Key>)")
 		minCost      = fs.Float64("min-cost", -1.0, "Minimum display cost threshold (e.g. 0.01)")
 		compareMoM   = fs.Bool("compare", false, "Compare Month-over-Month with preceding period")
 		failThresh   = fs.Float64("fail-on-threshold", -1.0, "Terminate with exit code 1 if total cost exceeds this threshold")
@@ -368,13 +375,42 @@ func LoadConfig(args []string) (*Config, error) {
 	cfg.MetricsList = cfg.Defaults.Metrics
 
 	if *groupBy != "" {
-		if strings.HasPrefix(strings.ToUpper(*groupBy), "TAG:") {
-			cfg.Grouping.Type = "TAG"
-			cfg.Grouping.Key = (*groupBy)[4:]
-		} else {
-			cfg.Grouping.Type = "DIMENSION"
-			cfg.Grouping.Key = strings.ToUpper(*groupBy)
+		parts := strings.Split(*groupBy, ",")
+		var parsedGroupings []GroupingConfig
+		for _, part := range parts {
+			part = strings.TrimSpace(part)
+			if part == "" {
+				continue
+			}
+			if strings.HasPrefix(strings.ToUpper(part), "TAG:") {
+				parsedGroupings = append(parsedGroupings, GroupingConfig{
+					Type: "TAG",
+					Key:  part[4:],
+				})
+			} else {
+				parsedGroupings = append(parsedGroupings, GroupingConfig{
+					Type: "DIMENSION",
+					Key:  strings.ToUpper(part),
+				})
+			}
 		}
+		if len(parsedGroupings) > 2 {
+			return nil, fmt.Errorf("AWS Cost Explorer supports a maximum of 2 group-by dimensions, received %d", len(parsedGroupings))
+		}
+		if len(parsedGroupings) > 0 {
+			cfg.Groupings = parsedGroupings
+			cfg.Grouping = parsedGroupings[0]
+		}
+	} else if len(cfg.Groupings) > 0 {
+		if len(cfg.Groupings) > 2 {
+			return nil, fmt.Errorf("AWS Cost Explorer supports a maximum of 2 group-by dimensions, received %d", len(cfg.Groupings))
+		}
+		cfg.Grouping = cfg.Groupings[0]
+	} else if cfg.Grouping.Key != "" {
+		cfg.Groupings = []GroupingConfig{cfg.Grouping}
+	} else {
+		cfg.Grouping = GroupingConfig{Type: "DIMENSION", Key: "SERVICE"}
+		cfg.Groupings = []GroupingConfig{cfg.Grouping}
 	}
 
 	if *minCost >= 0.0 {

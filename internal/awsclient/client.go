@@ -193,7 +193,7 @@ func (c *Client) GenerateReport(ctx context.Context, cfg *config.Config, now tim
 			Currency:         reportCurrency,
 			EstimatedOrFinal: "Finalized",
 			ActiveServices:   len(currentItems),
-			GroupKey:         cfg.Grouping.Key,
+			GroupKey:         getReportGroupKey(cfg),
 			TagFilter:        cfg.TagFilters.Format(),
 		},
 		Totals:           currentTotals,
@@ -435,21 +435,32 @@ func (c *Client) fetchCostData(ctx context.Context, cfg *config.Config, dateRang
 		End:   aws.String(dateRange.EndExclusiveAWS.Format(DateFormat)),
 	}
 
-	groupBy := []cetypes.GroupDefinition{}
-	if cfg.Grouping.Type == "TAG" {
-		groupBy = append(groupBy, cetypes.GroupDefinition{
-			Type: cetypes.GroupDefinitionTypeTag,
-			Key:  aws.String(cfg.Grouping.Key),
-		})
-	} else {
-		dimKey := cfg.Grouping.Key
-		if dimKey == "" {
-			dimKey = "SERVICE"
+	groupings := cfg.Groupings
+	if len(groupings) == 0 {
+		if cfg.Grouping.Key != "" {
+			groupings = []config.GroupingConfig{cfg.Grouping}
+		} else {
+			groupings = []config.GroupingConfig{{Type: "DIMENSION", Key: "SERVICE"}}
 		}
-		groupBy = append(groupBy, cetypes.GroupDefinition{
-			Type: cetypes.GroupDefinitionTypeDimension,
-			Key:  aws.String(dimKey),
-		})
+	}
+
+	groupBy := []cetypes.GroupDefinition{}
+	for _, g := range groupings {
+		if strings.EqualFold(g.Type, "TAG") {
+			groupBy = append(groupBy, cetypes.GroupDefinition{
+				Type: cetypes.GroupDefinitionTypeTag,
+				Key:  aws.String(g.Key),
+			})
+		} else {
+			dimKey := g.Key
+			if dimKey == "" {
+				dimKey = "SERVICE"
+			}
+			groupBy = append(groupBy, cetypes.GroupDefinition{
+				Type: cetypes.GroupDefinitionTypeDimension,
+				Key:  aws.String(dimKey),
+			})
+		}
 	}
 
 	var totals TotalCosts
@@ -552,16 +563,7 @@ func (c *Client) fetchCostData(ctx context.Context, cfg *config.Config, dateRang
 					}
 				}
 
-				name := "No Group Name"
-				if len(grp.Keys) > 0 {
-					name = grp.Keys[0]
-					if strings.HasPrefix(name, cfg.Grouping.Key+"$") {
-						name = strings.TrimPrefix(name, cfg.Grouping.Key+"$")
-					}
-					if name == "" {
-						name = "Untagged / Other"
-					}
-				}
+				name := formatGroupKeys(grp.Keys, groupings, cfg.Accounts)
 
 				item, ok := itemsMap[name]
 				if !ok {
@@ -804,7 +806,17 @@ func GenerateMockReport(cfg *config.Config, now time.Time) (*CostReport, error) 
 	if mockAccountName == "" && cfg.Accounts != nil {
 		mockAccountName = cfg.Accounts["715195480427"]
 	}
-	if strings.EqualFold(cfg.Grouping.Key, "LINKED_ACCOUNT") {
+	if len(cfg.Groupings) > 1 {
+		g1 := cfg.Groupings[1]
+		for i := range filtered {
+			k1 := "Production"
+			if strings.EqualFold(g1.Type, "TAG") {
+				k1 = g1.Key + "$Production"
+			}
+			keys := []string{filtered[i].Name, k1}
+			filtered[i].Name = formatGroupKeys(keys, cfg.Groupings, cfg.Accounts)
+		}
+	} else if strings.EqualFold(cfg.Grouping.Key, "LINKED_ACCOUNT") {
 		for i := range filtered {
 			itemAccountName := ""
 			if filtered[i].Name == "715195480427" {
@@ -832,7 +844,7 @@ func GenerateMockReport(cfg *config.Config, now time.Time) (*CostReport, error) 
 			Currency:         mockCurrency,
 			EstimatedOrFinal: "Finalized",
 			ActiveServices:   len(filtered),
-			GroupKey:         cfg.Grouping.Key,
+			GroupKey:         getReportGroupKey(cfg),
 			TagFilter:        cfg.TagFilters.Format(),
 		},
 		Totals:        totals,
@@ -1152,4 +1164,84 @@ func resolveAccountName(account string, accounts map[string]string, explicitName
 		return fmt.Sprintf("%s (%s)", account, name)
 	}
 	return account
+}
+
+func getReportGroupKey(cfg *config.Config) string {
+	if len(cfg.Groupings) > 1 {
+		var gKeys []string
+		for _, g := range cfg.Groupings {
+			if strings.EqualFold(g.Type, "TAG") {
+				gKeys = append(gKeys, "TAG:"+g.Key)
+			} else {
+				gKeys = append(gKeys, g.Key)
+			}
+		}
+		return strings.Join(gKeys, ",")
+	}
+	if strings.EqualFold(cfg.Grouping.Type, "TAG") {
+		return "TAG:" + cfg.Grouping.Key
+	}
+	return cfg.Grouping.Key
+}
+
+func formatGroupKey(key string, g config.GroupingConfig, accounts map[string]string) (string, bool) {
+	if strings.EqualFold(g.Type, "TAG") {
+		tagVal := key
+		if strings.HasPrefix(tagVal, g.Key+"$") {
+			tagVal = strings.TrimPrefix(tagVal, g.Key+"$")
+		} else {
+			parts := strings.SplitN(key, "$", 2)
+			if len(parts) == 2 {
+				tagVal = parts[1]
+			}
+		}
+		if tagVal == "" {
+			tagVal = "Untagged"
+		}
+		return tagVal, true
+	}
+
+	val := key
+	if strings.EqualFold(g.Key, "LINKED_ACCOUNT") && accounts != nil {
+		if alias, ok := accounts[key]; ok {
+			val = fmt.Sprintf("%s (%s)", alias, key)
+		}
+	}
+	if val == "" {
+		val = "Unknown"
+	}
+	return val, false
+}
+
+func formatGroupKeys(keys []string, groupings []config.GroupingConfig, accounts map[string]string) string {
+	if len(keys) == 0 {
+		return "Unknown"
+	}
+	if len(keys) == 1 {
+		val, isTag := formatGroupKey(keys[0], groupings[0], accounts)
+		if isTag && val == "Untagged" {
+			return "Untagged / Other"
+		}
+		return val
+	}
+
+	val0, isTag0 := formatGroupKey(keys[0], groupings[0], accounts)
+	var val1 string
+	var isTag1 bool
+	if len(groupings) > 1 {
+		val1, isTag1 = formatGroupKey(keys[1], groupings[1], accounts)
+	} else {
+		val1 = keys[1]
+	}
+
+	if !isTag0 && isTag1 {
+		return fmt.Sprintf("%s [%s=%s]", val0, groupings[1].Key, val1)
+	}
+	if isTag0 && !isTag1 {
+		return fmt.Sprintf("%s [%s=%s]", val1, groupings[0].Key, val0)
+	}
+	if isTag0 && isTag1 {
+		return fmt.Sprintf("[%s=%s] [%s=%s]", groupings[0].Key, val0, groupings[1].Key, val1)
+	}
+	return fmt.Sprintf("%s - %s", val0, val1)
 }
