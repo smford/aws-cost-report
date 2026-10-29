@@ -245,3 +245,52 @@ account_name: "Staging Workloads"
 		t.Errorf("expected AccountName 'Alias Name', got %q", cfg4.AccountName)
 	}
 }
+
+func TestLoadConfigMonthly(t *testing.T) {
+	// 1. --monthly flag defaults to 12 months when months not specified
+	cfg1, err := LoadConfig([]string{"--monthly"})
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+	if !cfg1.Monthly {
+		t.Errorf("expected Monthly true, got false")
+	}
+	if cfg1.MonthsBack != 12 {
+		t.Errorf("expected MonthsBack 12, got %d", cfg1.MonthsBack)
+	}
+
+	// 2. --trend alias
+	cfg2, err := LoadConfig([]string{"--trend", "--months", "6"})
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+	if !cfg2.Monthly {
+		t.Errorf("expected Monthly true, got false")
+	}
+	if cfg2.MonthsBack != 6 {
+		t.Errorf("expected MonthsBack 6, got %d", cfg2.MonthsBack)
+	}
+
+	// 3. YAML config with monthly: true
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "monthly-config.yaml")
+	yamlContent := `
+version: "1"
+defaults:
+  monthly: true
+  months_back: 12
+`
+	if err := os.WriteFile(configPath, []byte(yamlContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+	cfg3, err := LoadConfig([]string{"--config", configPath})
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+	if !cfg3.Monthly {
+		t.Errorf("expected Monthly true from YAML, got false")
+	}
+	if cfg3.MonthsBack != 12 {
+		t.Errorf("expected MonthsBack 12, got %d", cfg3.MonthsBack)
+	}
+}

@@ -694,3 +694,35 @@ func TestExplicitNameOverridesIAMAlias(t *testing.T) {
 		t.Errorf("expected AccountName 'Explicit CLI Name', got %q", report.Metadata.AccountName)
 	}
 }
+
+func TestMonthlyBreakdownWithTopNAggregation(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.Monthly = true
+	cfg.MonthsBack = 6
+	cfg.Defaults.Top = 3
+
+	refTime := time.Date(2026, time.October, 28, 12, 0, 0, 0, time.UTC)
+	report, err := GenerateMockReport(cfg, refTime)
+	if err != nil {
+		t.Fatalf("GenerateMockReport failed: %v", err)
+	}
+
+	if report.MonthlyBreakdown == nil {
+		t.Fatalf("expected MonthlyBreakdown to be populated")
+	}
+	if len(report.MonthlyBreakdown.Months) != 6 {
+		t.Errorf("expected 6 months, got %d", len(report.MonthlyBreakdown.Months))
+	}
+
+	// With Top 3, items should be Top 3 + "Other Services"
+	if len(report.MonthlyBreakdown.Items) != 4 {
+		t.Fatalf("expected 4 monthly items (3 top + 1 Other Services), got %d", len(report.MonthlyBreakdown.Items))
+	}
+	lastItem := report.MonthlyBreakdown.Items[len(report.MonthlyBreakdown.Items)-1]
+	if lastItem.Name != "Other Services" {
+		t.Errorf("expected last item to be 'Other Services', got %q", lastItem.Name)
+	}
+	if lastItem.Total <= 0 {
+		t.Errorf("expected Other Services total > 0, got %f", lastItem.Total)
+	}
+}

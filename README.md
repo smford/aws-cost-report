@@ -29,6 +29,7 @@ A production-grade, zero-dependency (outside official AWS SDK v2 and YAML parser
 - **Strict AWS Date Boundaries**: Automatically handles AWS Cost Explorer's inclusive-Start / exclusive-End date rules while presenting human-readable inclusive dates in all reports.
 - **Three Core Cost Dimensions**: Simultaneously extracts and reports `UnblendedCost`, `BlendedCost`, and `AmortizedCost`.
 - **Month-over-Month (MoM) Delta**: Computes absolute dollar difference ($) and percentage changes (% Δ) against preceding billing periods with ANSI colorized delta indicators (green for reductions, red for increases).
+- **Multi-Month Column Breakdown (`--monthly` / `--trend`)**: View up to 12+ historical months side-by-side in multi-column format (each month has its own column, plus total), in terminal tables, Markdown, CSV, and JSON.
 - **Multi-Dimension Grouping**: Group by AWS `SERVICE`, `LINKED_ACCOUNT`, or custom Cost Allocation Tags (`TAG:Environment`, `TAG:Project`, etc.).
 - **SRE Budget Guardrails (`--fail-on-threshold`)**: Blocks CI/CD pipelines by terminating with exit code `1` if total billing exceeds a configured dollar threshold.
 - **Multi-Format Output Engines**:
@@ -263,21 +264,63 @@ aws-cost-report generate --group-by="TAG:Environment" --filter="Untagged" --comp
 > 2. **Evaluated Per Tag Key**: AWS Cost Explorer does not have a global "completely untagged" dimension across all potential tags simultaneously; grouping evaluates untagged resources for the specific tag key requested (e.g., `TAG:Environment`, `TAG:CostCenter`).
 > 3. **Cost Aggregation vs. Resource IDs**: The tool reports aggregate monetary figures (e.g., `$450.00` on `Untagged / Other`), but does not enumerate individual resource ARNs or IDs (which would require AWS Config or the AWS Resource Groups Tagging API).
 
-### 9. Top N Cost Drivers
+### 9. Multi-Month Trend & 12-Month Column Breakdown (`--monthly` / `--trend`)
+View up to 12+ historical billing months in a multi-column pivot table where each month is rendered in its own dedicated column alongside cumulative totals:
+
+```bash
+# View the previous 12 months side-by-side in column format (default: 12 months)
+aws-cost-report generate --months=12 --monthly
+
+# View the previous 6 months
+aws-cost-report generate --months=6 --monthly
+
+# Export 12-month column pivot to CSV or Markdown
+aws-cost-report generate --months=12 --monthly --format=csv -o 12-month-costs.csv
+aws-cost-report generate --months=12 --monthly --format=markdown
+```
+
+#### Terminal Output Preview:
+```text
+===================================================================================================================================================================================
+                                                               AWS MONTHLY BILLING & USAGE REPORT (HISTORICAL TREND)
+===================================================================================================================================================================================
+ Account ID:         715195480427 (Production Core)
+ Billing Period:     October 2025 - September 2026 (12 Months)
+ Period:             2025-10-01 to 2026-09-30 (inclusive)
+ Currency:           USD
+ Estimated / Final:  Finalized
+ Active Services:    14
+ Grand Total:        $258.97
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Service Name                     |   Oct 25 |   Nov 25 |   Dec 25 |   Jan 26 |   Feb 26 |   Mar 26 |   Apr 26 |   May 26 |   Jun 26 |   Jul 26 |   Aug 26 |   Sep 26 | Total (USD)
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Amazon DynamoDB                  |     5.29 |     5.68 |     5.57 |     5.45 |     5.34 |     5.73 |     5.62 |     5.51 |     5.40 |     5.29 |     5.68 |     5.57 |      66.13
+ AWS Config                       |     4.78 |     4.68 |     4.59 |     4.92 |     4.82 |     4.73 |     4.64 |     4.54 |     4.87 |     4.78 |     4.68 |     4.59 |      56.62
+ Amazon Cognito                   |     4.04 |     4.34 |     4.25 |     4.17 |     4.09 |     4.00 |     4.30 |     4.21 |     4.13 |     4.04 |     4.34 |     4.25 |      50.16
+ Tax                              |     2.95 |     2.89 |     2.83 |     2.77 |     2.98 |     2.92 |     2.86 |     2.80 |     3.01 |     2.95 |     2.89 |     2.83 |      34.68
+ AWS Key Management Service       |     0.98 |     0.96 |     1.03 |     1.01 |     0.99 |     0.97 |     1.04 |     1.02 |     1.00 |     0.98 |     0.96 |     1.03 |      11.97
+ Amazon Simple Storage Service    |     0.97 |     0.95 |     0.93 |     0.91 |     0.98 |     0.96 |     0.94 |     0.92 |     0.90 |     0.97 |     0.95 |     0.93 |      11.31
+...
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Total (USD)                      |    21.36 |    21.83 |    21.55 |    21.59 |    21.50 |    21.66 |    21.72 |    21.37 |    21.65 |    21.36 |    21.83 |    21.55 |     258.97
+===================================================================================================================================================================================
+```
+
+### 10. Top N Cost Drivers
 Highlight the largest cost drivers and consolidate all smaller workloads into `"Other Services"`:
 
 ```bash
 aws-cost-report generate --compare --top=5
 ```
 
-### 10. Explicit Date Range
+### 11. Explicit Date Range
 Query custom date intervals (for custom ranges, comparison periods match the exact duration in days):
 
 ```bash
 aws-cost-report generate --start=2026-08-01 --end=2026-09-30
 ```
 
-### 11. SRE Budget Guardrail (CI/CD Quality Gate)
+### 12. SRE Budget Guardrail (CI/CD Quality Gate)
 Exit with status code `1` if total unblended cost exceeds threshold:
 
 ```bash
@@ -285,7 +328,7 @@ aws-cost-report generate --threshold=50.00
 echo $? # Returns 1 if total cost > $50.00, or 0 if within budget
 ```
 
-### 12. Export to JSON or CSV
+### 13. Export to JSON or CSV
 
 ```bash
 # JSON output for jq or downstream processing
@@ -295,7 +338,7 @@ aws-cost-report generate --format=json > monthly-costs.json
 aws-cost-report generate --format=csv > monthly-costs.csv
 ```
 
-### 13. Multi-Currency Support (Auto-Detected & Configurable)
+### 14. Multi-Currency Support (Auto-Detected & Configurable)
 `aws-cost-report` automatically detects your AWS account's billing currency (`EUR`, `GBP`, `JPY`, `AUD`, `CAD`, `USD`, etc.) from the AWS Cost Explorer API response and dynamically renders the corresponding symbols (`€`, `£`, `¥`, `A$`, `CA$`, `$`) and headers (`Diff (€)`, `Delta (£)`).
 
 You can also explicitly set or override the currency:
@@ -371,6 +414,7 @@ jobs:
 | `mock` | Run with offline deterministic mock data (no AWS API calls) | `false` | No |
 | `config` | Path to custom YAML configuration file | `""` | No |
 | `currency` | Override currency code and symbol (e.g. `USD`, `EUR`, `GBP`). Auto-detected from AWS by default. | `""` | No |
+| `monthly` | Render multi-month historical breakdown in column format (`true`/`false`) | `false` | No |
 | `output-file` | Optional path to save the formatted report to disk | `""` | No |
 
 ### Action Outputs

@@ -94,6 +94,10 @@ inputs:
     description: 'Override currency code and symbol (e.g. USD, EUR, GBP). Auto-detected from AWS by default.'
     required: false
     default: ''
+  monthly:
+    description: 'Display multi-month historical breakdown with each month as a separate column (true/false)'
+    required: false
+    default: 'false'
 
 outputs:
   report:
@@ -268,6 +272,10 @@ runs:
 
         if [ "${{ inputs.mock }}" = "true" ]; then
           ARGS+=("--mock")
+        fi
+
+        if [ "${{ inputs.monthly }}" = "true" ]; then
+          ARGS+=("--monthly")
         fi
 
         if [ -n "${{ inputs.name }}" ]; then

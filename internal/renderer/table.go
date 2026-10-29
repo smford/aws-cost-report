@@ -17,6 +17,10 @@ const (
 
 // RenderTable formats the CostReport as a fixed-width terminal ASCII table.
 func RenderTable(w io.Writer, r *awsclient.CostReport, noColor bool) error {
+	if r.MonthlyBreakdown != nil && len(r.MonthlyBreakdown.Months) > 1 {
+		return renderMonthlyTable(w, r, noColor)
+	}
+
 	var b strings.Builder
 
 	// Header banner
@@ -156,4 +160,96 @@ func formatTablePct(val float64, width int) string {
 		return fmt.Sprintf("%*.2f%%", width-1, 0.0)
 	}
 	return fmt.Sprintf("%+*.2f%%", width-1, val)
+}
+
+func renderMonthlyTable(w io.Writer, r *awsclient.CostReport, noColor bool) error {
+	var b strings.Builder
+	mb := r.MonthlyBreakdown
+
+	// Calculate column widths
+	serviceColWidth := 24
+	for _, it := range mb.Items {
+		if len(it.Name) > serviceColWidth {
+			serviceColWidth = len(it.Name)
+		}
+	}
+	if serviceColWidth > 32 {
+		serviceColWidth = 32
+	}
+
+	monthColWidth := 8
+	totalColWidth := 10
+
+	calcTableWidth := 1 + serviceColWidth + 3 + len(mb.Months)*(monthColWidth+3) + totalColWidth + 1
+	if calcTableWidth < tableWidth {
+		calcTableWidth = tableWidth
+	}
+	divDbl := strings.Repeat("=", calcTableWidth)
+	divSgl := strings.Repeat("-", calcTableWidth)
+
+	// Header banner
+	b.WriteString(divDbl + "\n")
+	title := "AWS MONTHLY BILLING & USAGE REPORT (HISTORICAL TREND)"
+	leftPad := (calcTableWidth - len(title)) / 2
+	if leftPad < 0 {
+		leftPad = 0
+	}
+	b.WriteString(strings.Repeat(" ", leftPad) + title + "\n")
+	b.WriteString(divDbl + "\n")
+
+	// Metadata
+	b.WriteString(fmt.Sprintf(" Account ID:         %s\n", r.Metadata.AccountID))
+	if r.Metadata.AccountName != "" {
+		b.WriteString(fmt.Sprintf(" Account Name:       %s\n", r.Metadata.AccountName))
+	}
+	b.WriteString(fmt.Sprintf(" Billing Period:     %s (%d Months)\n", r.Metadata.BillingMonth, len(mb.Months)))
+	b.WriteString(fmt.Sprintf(" Period:             %s to %s (inclusive)\n", r.Metadata.PeriodStart, r.Metadata.PeriodEnd))
+	b.WriteString(fmt.Sprintf(" Currency:           %s\n", r.Metadata.Currency))
+	b.WriteString(fmt.Sprintf(" Estimated / Final:  %s\n", r.Metadata.EstimatedOrFinal))
+	if r.Metadata.TagFilter != "" {
+		b.WriteString(fmt.Sprintf(" Tag Filter:         %s\n", r.Metadata.TagFilter))
+	}
+	groupLabel := "Services"
+	if r.Metadata.GroupKey != "" && !strings.EqualFold(r.Metadata.GroupKey, "SERVICE") {
+		groupLabel = r.Metadata.GroupKey
+	}
+	b.WriteString(fmt.Sprintf(" Active %-12s %d\n", groupLabel+":", len(mb.Items)))
+	b.WriteString(fmt.Sprintf(" Grand Total:        %s%.2f\n", r.Metadata.CurrencySymbol(), mb.GrandTotal))
+	b.WriteString(divSgl + "\n")
+
+	// Table header
+	headerCol := "Service Name"
+	if r.Metadata.GroupKey != "" && !strings.EqualFold(r.Metadata.GroupKey, "SERVICE") {
+		headerCol = r.Metadata.GroupKey
+	}
+	b.WriteString(fmt.Sprintf(" %-*s", serviceColWidth, truncate(headerCol, serviceColWidth)))
+	for _, m := range mb.Months {
+		b.WriteString(fmt.Sprintf(" | %*s", monthColWidth, m.Label))
+	}
+	b.WriteString(fmt.Sprintf(" | %*s\n", totalColWidth, "Total ("+r.Metadata.Currency+")"))
+	b.WriteString(divSgl + "\n")
+
+	// Table rows
+	for _, it := range mb.Items {
+		b.WriteString(fmt.Sprintf(" %-*s", serviceColWidth, truncate(it.Name, serviceColWidth)))
+		for _, m := range mb.Months {
+			cost := it.Costs[m.Key]
+			b.WriteString(fmt.Sprintf(" | %*.2f", monthColWidth, cost))
+		}
+		b.WriteString(fmt.Sprintf(" | %*.2f\n", totalColWidth, it.Total))
+	}
+	b.WriteString(divSgl + "\n")
+
+	// Table total row
+	totalLabel := fmt.Sprintf("Total (%s)", r.Metadata.Currency)
+	b.WriteString(fmt.Sprintf(" %-*s", serviceColWidth, totalLabel))
+	for _, m := range mb.Months {
+		mTot := mb.Totals[m.Key]
+		b.WriteString(fmt.Sprintf(" | %*.2f", monthColWidth, mTot))
+	}
+	b.WriteString(fmt.Sprintf(" | %*.2f\n", totalColWidth, mb.GrandTotal))
+	b.WriteString(divDbl + "\n")
+
+	_, err := io.WriteString(w, b.String())
+	return err
 }

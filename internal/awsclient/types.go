@@ -45,12 +45,37 @@ type TotalCosts struct {
 	HasPreviousCost   bool    `json:"has_previous_cost,omitempty"`
 }
 
+// MonthlyBucket represents a single month column in a multi-month breakdown.
+type MonthlyBucket struct {
+	Key       string  `json:"key"`        // Format: "YYYY-MM" (e.g. "2025-11")
+	Label     string  `json:"label"`      // Short header label (e.g. "Nov 25")
+	FullLabel string  `json:"full_label"` // Full header label (e.g. "November 2025")
+	Total     float64 `json:"total"`
+}
+
+// MonthlyLineItem represents a service's monthly breakdown across all queried months.
+type MonthlyLineItem struct {
+	Name    string             `json:"name"`
+	Costs   map[string]float64 `json:"costs"` // map[monthKey]cost
+	Total   float64            `json:"total"`
+	Average float64            `json:"average"`
+}
+
+// MonthlyBreakdown contains the tabular multi-month column breakdown.
+type MonthlyBreakdown struct {
+	Months     []MonthlyBucket    `json:"months"`
+	Items      []MonthlyLineItem  `json:"items"`
+	Totals     map[string]float64 `json:"totals"` // map[monthKey]total
+	GrandTotal float64            `json:"grand_total"`
+}
+
 // CostReport is the root domain model containing metadata, totals, and line items.
 type CostReport struct {
-	Metadata      ReportMetadata `json:"metadata"`
-	Totals        TotalCosts     `json:"totals"`
-	Items         []LineItem     `json:"items"`
-	HasComparison bool           `json:"has_comparison"`
+	Metadata         ReportMetadata    `json:"metadata"`
+	Totals           TotalCosts        `json:"totals"`
+	Items            []LineItem        `json:"items"`
+	HasComparison    bool              `json:"has_comparison"`
+	MonthlyBreakdown *MonthlyBreakdown `json:"monthly_breakdown,omitempty"`
 }
 
 // CurrencySymbol maps a 3-letter ISO currency code to its standard symbol.

@@ -224,3 +224,78 @@ func TestRenderTableWithNonUSDCurrency(t *testing.T) {
 		t.Errorf("expected 'Amount (GBP)' header in table, got:\n%s", out)
 	}
 }
+
+func TestRenderMonthlyBreakdown(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.Monthly = true
+	cfg.MonthsBack = 12
+	refTime := time.Date(2026, time.October, 28, 12, 0, 0, 0, time.UTC)
+	report, err := awsclient.GenerateMockReport(cfg, refTime)
+	if err != nil {
+		t.Fatalf("GenerateMockReport failed: %v", err)
+	}
+	if report.MonthlyBreakdown == nil {
+		t.Fatalf("expected MonthlyBreakdown to be populated")
+	}
+	if len(report.MonthlyBreakdown.Months) != 12 {
+		t.Errorf("expected 12 months, got %d", len(report.MonthlyBreakdown.Months))
+	}
+
+	// 1. Table
+	var tableBuf bytes.Buffer
+	if err := RenderTable(&tableBuf, report, true); err != nil {
+		t.Fatalf("RenderTable failed: %v", err)
+	}
+	tableOut := tableBuf.String()
+	if !strings.Contains(tableOut, "HISTORICAL TREND") {
+		t.Errorf("expected 'HISTORICAL TREND' in title")
+	}
+	if !strings.Contains(tableOut, "12 Months") {
+		t.Errorf("expected '12 Months' in metadata")
+	}
+	if !strings.Contains(tableOut, "Oct 25") || !strings.Contains(tableOut, "Sep 26") {
+		t.Errorf("expected month column headers in table, got:\n%s", tableOut)
+	}
+	if !strings.Contains(tableOut, "Amazon DynamoDB") {
+		t.Errorf("expected DynamoDB in monthly table")
+	}
+
+	// 2. Markdown
+	var mdBuf bytes.Buffer
+	if err := RenderMarkdown(&mdBuf, report, false, 0.00); err != nil {
+		t.Fatalf("RenderMarkdown failed: %v", err)
+	}
+	mdOut := mdBuf.String()
+	if !strings.Contains(mdOut, "### 📅 Monthly Cost Breakdown (12 Months)") {
+		t.Errorf("expected breakdown section in markdown, got:\n%s", mdOut)
+	}
+	if !strings.Contains(mdOut, "| Amazon DynamoDB |") {
+		t.Errorf("expected DynamoDB row in markdown table")
+	}
+
+	// 3. CSV
+	var csvBuf bytes.Buffer
+	if err := RenderCSV(&csvBuf, report); err != nil {
+		t.Fatalf("RenderCSV failed: %v", err)
+	}
+	csvOut := csvBuf.String()
+	if !strings.Contains(csvOut, "Service,2025-10,2025-11,2025-12,2026-01,2026-02,2026-03,2026-04,2026-05,2026-06,2026-07,2026-08,2026-09,Total,Average,Currency") {
+		t.Errorf("expected CSV monthly header, got:\n%s", csvOut)
+	}
+	if !strings.Contains(csvOut, "Amazon DynamoDB,") {
+		t.Errorf("expected DynamoDB record in CSV")
+	}
+
+	// 4. JSON
+	var jsonBuf bytes.Buffer
+	if err := RenderJSON(&jsonBuf, report); err != nil {
+		t.Fatalf("RenderJSON failed: %v", err)
+	}
+	var jsonMap map[string]interface{}
+	if err := json.Unmarshal(jsonBuf.Bytes(), &jsonMap); err != nil {
+		t.Fatalf("JSON unmarshal failed: %v", err)
+	}
+	if _, ok := jsonMap["monthly_breakdown"]; !ok {
+		t.Errorf("expected 'monthly_breakdown' key in JSON")
+	}
+}

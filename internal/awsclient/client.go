@@ -129,6 +129,7 @@ func (c *Client) GenerateReport(ctx context.Context, cfg *config.Config, now tim
 	var (
 		currentTotals    TotalCosts
 		currentItems     []LineItem
+		currentMonthly   *MonthlyBreakdown
 		detectedCurrency string
 		prevTotals       TotalCosts
 		prevItems        []LineItem
@@ -143,12 +144,12 @@ func (c *Client) GenerateReport(ctx context.Context, cfg *config.Config, now tim
 
 		go func() {
 			defer wg.Done()
-			currentTotals, currentItems, detectedCurrency, errCurr = c.fetchCostData(ctx, cfg, dateRange)
+			currentTotals, currentItems, currentMonthly, detectedCurrency, errCurr = c.fetchCostData(ctx, cfg, dateRange)
 		}()
 
 		go func() {
 			defer wg.Done()
-			prevTotals, prevItems, _, errPrev = c.fetchCostData(ctx, cfg, prevDateRange)
+			prevTotals, prevItems, _, _, errPrev = c.fetchCostData(ctx, cfg, prevDateRange)
 		}()
 
 		wg.Wait()
@@ -160,7 +161,7 @@ func (c *Client) GenerateReport(ctx context.Context, cfg *config.Config, now tim
 			return nil, fmt.Errorf("failed to fetch comparison period: %w", errPrev)
 		}
 	} else {
-		currentTotals, currentItems, detectedCurrency, errCurr = c.fetchCostData(ctx, cfg, dateRange)
+		currentTotals, currentItems, currentMonthly, detectedCurrency, errCurr = c.fetchCostData(ctx, cfg, dateRange)
 		if errCurr != nil {
 			return nil, errCurr
 		}
@@ -188,9 +189,10 @@ func (c *Client) GenerateReport(ctx context.Context, cfg *config.Config, now tim
 			GroupKey:         cfg.Grouping.Key,
 			TagFilter:        cfg.TagFilters.Format(),
 		},
-		Totals:        currentTotals,
-		Items:         currentItems,
-		HasComparison: false,
+		Totals:           currentTotals,
+		Items:            currentItems,
+		HasComparison:    false,
+		MonthlyBreakdown: currentMonthly,
 	}
 
 	if dateRange.IsEstimated {
@@ -352,11 +354,75 @@ func (c *Client) GenerateReport(ctx context.Context, cfg *config.Config, now tim
 	report.Items = filtered
 	report.Metadata.ActiveServices = len(filtered)
 
+	if currentMonthly != nil && len(currentMonthly.Months) > 0 {
+		report.MonthlyBreakdown = alignMonthlyBreakdown(currentMonthly, filtered, cfg.Grouping.Key)
+	}
+
 	return report, nil
 }
 
+// alignMonthlyBreakdown aligns and re-aggregates monthly breakdown items to match the finalized report items.
+func alignMonthlyBreakdown(mb *MonthlyBreakdown, targetItems []LineItem, groupKey string) *MonthlyBreakdown {
+	if mb == nil {
+		return nil
+	}
+	itemMap := make(map[string]MonthlyLineItem, len(mb.Items))
+	for _, it := range mb.Items {
+		itemMap[it.Name] = it
+	}
+
+	otherName := "Other Services"
+	if strings.EqualFold(groupKey, "LINKED_ACCOUNT") {
+		otherName = "Other Accounts"
+	} else if groupKey != "" && !strings.EqualFold(groupKey, "SERVICE") {
+		otherName = "Other (" + groupKey + ")"
+	}
+
+	var aligned []MonthlyLineItem
+	used := make(map[string]bool)
+
+	for _, tItem := range targetItems {
+		if tItem.Name == otherName {
+			otherCosts := make(map[string]float64, len(mb.Months))
+			var otherTotal float64
+			for _, it := range mb.Items {
+				if !used[it.Name] {
+					for _, m := range mb.Months {
+						otherCosts[m.Key] += it.Costs[m.Key]
+					}
+					otherTotal += it.Total
+				}
+			}
+			for k, v := range otherCosts {
+				otherCosts[k] = roundToTwo(v)
+			}
+			otherTotal = roundToTwo(otherTotal)
+			avg := 0.0
+			if len(mb.Months) > 0 {
+				avg = roundToTwo(otherTotal / float64(len(mb.Months)))
+			}
+			aligned = append(aligned, MonthlyLineItem{
+				Name:    otherName,
+				Costs:   otherCosts,
+				Total:   otherTotal,
+				Average: avg,
+			})
+		} else if mIt, exists := itemMap[tItem.Name]; exists {
+			aligned = append(aligned, mIt)
+			used[tItem.Name] = true
+		}
+	}
+
+	return &MonthlyBreakdown{
+		Months:     mb.Months,
+		Items:      aligned,
+		Totals:     mb.Totals,
+		GrandTotal: mb.GrandTotal,
+	}
+}
+
 // fetchCostData executes paginated queries against AWS Cost Explorer.
-func (c *Client) fetchCostData(ctx context.Context, cfg *config.Config, dateRange *DateRange) (TotalCosts, []LineItem, string, error) {
+func (c *Client) fetchCostData(ctx context.Context, cfg *config.Config, dateRange *DateRange) (TotalCosts, []LineItem, *MonthlyBreakdown, string, error) {
 	timePeriod := &cetypes.DateInterval{
 		Start: aws.String(dateRange.Start.Format(DateFormat)),
 		End:   aws.String(dateRange.EndExclusiveAWS.Format(DateFormat)),
@@ -383,6 +449,16 @@ func (c *Client) fetchCostData(ctx context.Context, cfg *config.Config, dateRang
 	var detectedCurrency string
 	itemsMap := make(map[string]*LineItem)
 	var nextPageToken *string
+
+	monthKeysMap := make(map[string]bool)
+	var monthKeys []string
+	type monthInfo struct {
+		label     string
+		fullLabel string
+	}
+	monthInfoMap := make(map[string]monthInfo)
+	monthTotalsMap := make(map[string]float64)
+	itemMonthlyCosts := make(map[string]map[string]float64)
 
 	var filterExpr *cetypes.Expression
 	if len(cfg.TagFilters) > 0 {
@@ -424,10 +500,25 @@ func (c *Client) fetchCostData(ctx context.Context, cfg *config.Config, dateRang
 
 		output, err := c.getCostAndUsageWithRetry(ctx, input)
 		if err != nil {
-			return totals, nil, "", fmt.Errorf("AWS Cost Explorer GetCostAndUsage failed: %w", err)
+			return totals, nil, nil, "", fmt.Errorf("AWS Cost Explorer GetCostAndUsage failed: %w", err)
 		}
 
 		for _, result := range output.ResultsByTime {
+			var mKey string
+			if result.TimePeriod != nil && result.TimePeriod.Start != nil {
+				if pt, err := time.Parse(DateFormat, *result.TimePeriod.Start); err == nil {
+					mKey = pt.Format("2006-01")
+					if !monthKeysMap[mKey] {
+						monthKeysMap[mKey] = true
+						monthKeys = append(monthKeys, mKey)
+						monthInfoMap[mKey] = monthInfo{
+							label:     pt.Format("Jan 06"),
+							fullLabel: pt.Format("January 2006"),
+						}
+					}
+				}
+			}
+
 			// Aggregate totals
 			if result.Total != nil {
 				for _, m := range result.Total {
@@ -471,14 +562,24 @@ func (c *Client) fetchCostData(ctx context.Context, cfg *config.Config, dateRang
 					itemsMap[name] = item
 				}
 
+				var uCost float64
 				if m, exists := grp.Metrics["UnblendedCost"]; exists && m.Amount != nil {
-					item.UnblendedCost += parseFloat(*m.Amount)
+					uCost = parseFloat(*m.Amount)
+					item.UnblendedCost += uCost
 				}
 				if m, exists := grp.Metrics["BlendedCost"]; exists && m.Amount != nil {
 					item.BlendedCost += parseFloat(*m.Amount)
 				}
 				if m, exists := grp.Metrics["AmortizedCost"]; exists && m.Amount != nil {
 					item.AmortizedCost += parseFloat(*m.Amount)
+				}
+
+				if mKey != "" {
+					if itemMonthlyCosts[name] == nil {
+						itemMonthlyCosts[name] = make(map[string]float64)
+					}
+					itemMonthlyCosts[name][mKey] += uCost
+					monthTotalsMap[mKey] += uCost
 				}
 			}
 		}
@@ -535,7 +636,57 @@ func (c *Client) fetchCostData(ctx context.Context, cfg *config.Config, dateRang
 		totals.AmortizedCost = totals.UnblendedCost
 	}
 
-	return totals, items, detectedCurrency, nil
+	var monthlyBreakdown *MonthlyBreakdown
+	if len(monthKeys) > 1 || cfg.Monthly {
+		sort.Strings(monthKeys)
+		var buckets []MonthlyBucket
+		totalsMap := make(map[string]float64, len(monthKeys))
+		var grandTotal float64
+
+		for _, mk := range monthKeys {
+			info := monthInfoMap[mk]
+			tot := roundToTwo(monthTotalsMap[mk])
+			buckets = append(buckets, MonthlyBucket{
+				Key:       mk,
+				Label:     info.label,
+				FullLabel: info.fullLabel,
+				Total:     tot,
+			})
+			totalsMap[mk] = tot
+			grandTotal += tot
+		}
+
+		var monthlyItems []MonthlyLineItem
+		for _, item := range items {
+			costs := make(map[string]float64, len(monthKeys))
+			var itTot float64
+			for _, mk := range monthKeys {
+				c := roundToTwo(itemMonthlyCosts[item.Name][mk])
+				costs[mk] = c
+				itTot += c
+			}
+			itTot = roundToTwo(itTot)
+			avg := 0.0
+			if len(monthKeys) > 0 {
+				avg = roundToTwo(itTot / float64(len(monthKeys)))
+			}
+			monthlyItems = append(monthlyItems, MonthlyLineItem{
+				Name:    item.Name,
+				Costs:   costs,
+				Total:   itTot,
+				Average: avg,
+			})
+		}
+
+		monthlyBreakdown = &MonthlyBreakdown{
+			Months:     buckets,
+			Items:      monthlyItems,
+			Totals:     totalsMap,
+			GrandTotal: roundToTwo(grandTotal),
+		}
+	}
+
+	return totals, items, monthlyBreakdown, detectedCurrency, nil
 }
 
 // GenerateMockReport generates realistic mock billing data matching specification benchmarks.
@@ -684,6 +835,73 @@ func GenerateMockReport(cfg *config.Config, now time.Time) (*CostReport, error) 
 
 	if dateRange.IsEstimated {
 		report.Metadata.EstimatedOrFinal = "Estimated"
+	}
+
+	// Generate monthly breakdown if multi-month or monthly mode requested
+	if cfg.Monthly || cfg.MonthsBack > 1 {
+		var months []MonthlyBucket
+		curr := dateRange.Start
+		for curr.Before(dateRange.EndExclusiveAWS) {
+			mKey := curr.Format("2006-01")
+			months = append(months, MonthlyBucket{
+				Key:       mKey,
+				Label:     curr.Format("Jan 06"),
+				FullLabel: curr.Format("January 2006"),
+			})
+			curr = curr.AddDate(0, 1, 0)
+		}
+
+		if len(months) > 1 || cfg.Monthly {
+			monthlyItems := make([]MonthlyLineItem, 0, len(filtered))
+			monthTotals := make(map[string]float64, len(months))
+			var grandTotal float64
+
+			for itemIdx, it := range filtered {
+				costs := make(map[string]float64, len(months))
+				var itemTotal float64
+				for mIdx, m := range months {
+					variance := (float64(((itemIdx*5 + mIdx*7) % 9) - 4)) / 100.0
+					mCost := roundToTwo(it.UnblendedCost * (1.0 + variance))
+					costs[m.Key] = mCost
+					itemTotal += mCost
+					monthTotals[m.Key] += mCost
+				}
+				itemTotal = roundToTwo(itemTotal)
+				avg := 0.0
+				if len(months) > 0 {
+					avg = roundToTwo(itemTotal / float64(len(months)))
+				}
+				monthlyItems = append(monthlyItems, MonthlyLineItem{
+					Name:    it.Name,
+					Costs:   costs,
+					Total:   itemTotal,
+					Average: avg,
+				})
+				grandTotal += itemTotal
+			}
+
+			for i := range months {
+				months[i].Total = roundToTwo(monthTotals[months[i].Key])
+			}
+
+			report.MonthlyBreakdown = &MonthlyBreakdown{
+				Months:     months,
+				Items:      monthlyItems,
+				Totals:     monthTotals,
+				GrandTotal: roundToTwo(grandTotal),
+			}
+
+			if cfg.MonthsBack > 1 {
+				for i := range report.Items {
+					report.Items[i].UnblendedCost = monthlyItems[i].Total
+					report.Items[i].BlendedCost = monthlyItems[i].Total
+					report.Items[i].AmortizedCost = monthlyItems[i].Total
+				}
+				report.Totals.UnblendedCost = report.MonthlyBreakdown.GrandTotal
+				report.Totals.BlendedCost = report.MonthlyBreakdown.GrandTotal
+				report.Totals.AmortizedCost = report.MonthlyBreakdown.GrandTotal
+			}
+		}
 	}
 
 	return report, nil

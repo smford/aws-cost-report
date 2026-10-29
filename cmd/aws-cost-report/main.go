@@ -53,6 +53,8 @@ COMMANDS:
 
 GENERATE FLAGS:
   --compare               Compare Month-over-Month with preceding billing period
+  --monthly               Display multi-month historical breakdown with each month as a separate column (default: 12 months)
+  --trend                 Alias for --monthly
   --format <string>       Output format: table (default), markdown, json, csv
   --months <int>          Number of historical complete months back to query (default: 1)
   --start <YYYY-MM-DD>    Explicit billing start date (inclusive)
@@ -116,6 +118,9 @@ EXAMPLES:
 
   # 14. Start HTTP microservice daemon
   aws-cost-report server --port=8080
+
+  # 15. View previous 12 months of bills in multi-column table format
+  aws-cost-report generate --months=12 --monthly
 
 Use "aws-cost-report <command> --help" for more information about a command.
 `
@@ -415,6 +420,19 @@ func runServer(cfg *config.Config) {
 			if monthsVal, err := strconv.Atoi(m); err == nil && monthsVal > 0 {
 				reqCfg.MonthsBack = monthsVal
 				reqCfg.Defaults.MonthsBack = monthsVal
+			}
+		}
+		if mon := q.Get("monthly"); mon == "true" || mon == "1" {
+			reqCfg.Monthly = true
+			if reqCfg.MonthsBack <= 1 {
+				reqCfg.MonthsBack = 12
+				reqCfg.Defaults.MonthsBack = 12
+			}
+		} else if tr := q.Get("trend"); tr == "true" || tr == "1" {
+			reqCfg.Monthly = true
+			if reqCfg.MonthsBack <= 1 {
+				reqCfg.MonthsBack = 12
+				reqCfg.Defaults.MonthsBack = 12
 			}
 		}
 		if s := q.Get("start"); s != "" {

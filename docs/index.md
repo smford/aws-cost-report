@@ -59,6 +59,7 @@ jobs:
 | `top` | Show top N highest cost items and aggregate remainder into Other | `""` |
 | `slack-webhook` | Incoming Slack webhook URL for automated ChatOps | `""` |
 | `write-summary` | Write report to `$GITHUB_STEP_SUMMARY` | `true` |
+| `monthly` | Render multi-month historical breakdown in column format | `false` |
 | `mock` | Run offline with synthetic dataset | `false` |
 | `output-file` | Optional path to save output file | `""` |
 
@@ -150,3 +151,20 @@ aws-cost-report generate --group-by="TAG:Environment" --filter="Untagged" --comp
 1. **Tag Activation**: The tag key (e.g. `Environment`, `Owner`, `Project`) must be activated as an active **Cost Allocation Tag** in the AWS Billing and Cost Management console before Cost Explorer can track or group by it.
 2. **Evaluated Per Tag Key**: AWS Cost Explorer does not have a global "completely untagged" dimension across all potential tags simultaneously; grouping evaluates untagged resources for the specific tag key requested (e.g., `TAG:Environment`, `TAG:CostCenter`).
 3. **Cost Aggregation vs. Resource IDs**: The tool reports aggregate monetary figures (e.g., `$450.00` on `Untagged / Other`), but does not enumerate individual resource ARNs or IDs (which would require AWS Config or the AWS Resource Groups Tagging API).
+
+---
+
+## Multi-Month Billing & 12-Month Column Trend
+
+View historical costs across multiple months side-by-side in dedicated columns:
+
+```bash
+# View the previous 12 months in column format (default: 12 months)
+aws-cost-report generate --months=12 --monthly
+
+# View the previous 6 months
+aws-cost-report generate --months=6 --monthly
+
+# Export 12-month pivot table to CSV for spreadsheets
+aws-cost-report generate --months=12 --monthly --format=csv -o 12-months.csv
+```

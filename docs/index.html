@@ -361,6 +361,17 @@ aws-cost-report generate --tag="Environment=Production" --group-by="LINKED_ACCOU
         </ul>
       </div>
 
+      <h3>Multi-Month Historical Trend (Column Format)</h3>
+      <p>View up to 12+ historical billing months in a multi-column pivot table where each month is rendered in its own dedicated column alongside cumulative totals:</p>
+      <pre><code># View previous 12 months side-by-side in column format:
+aws-cost-report generate --months=12 --monthly
+
+# View previous 6 months:
+aws-cost-report generate --months=6 --monthly
+
+# Export 12-month pivot table to CSV for spreadsheet analysis:
+aws-cost-report generate --months=12 --monthly --format=csv -o 12-months.csv</code></pre>
+
       <h3>Budget Guardrail</h3>
       <pre><code>aws-cost-report generate --threshold=50.00
 # Returns exit code 1 if total cost exceeds $50.00</code></pre>
