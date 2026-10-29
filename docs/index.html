@@ -332,6 +332,30 @@ aws-cost-report generate --tag="Environment=Production" --tag="Project=FinOps"
 # Combine tag filtering with Linked Account breakdown
 aws-cost-report generate --tag="Environment=Production" --group-by="LINKED_ACCOUNT"</code></pre>
 
+      <h3>Identifying Untagged Costs</h3>
+      <p>When you group costs by an AWS Cost Allocation Tag dimension, AWS Cost Explorer aggregates all resources missing that tag into an empty tag key value. The tool automatically maps this to <code>Untagged / Other</code>.</p>
+
+      <h4>1. View Breakdown of All Tag Values (Including Untagged Spend)</h4>
+      <pre><code>aws-cost-report generate --group-by="TAG:Environment"</code></pre>
+      <p>In the generated report table, an <code>Untagged / Other</code> line item reflects all costs incurred by resources lacking the <code>Environment</code> tag.</p>
+
+      <h4>2. Isolate Untagged Costs Only</h4>
+      <p>Use the <code>--filter</code> option to match the untagged line item and dynamically recalculate report totals:</p>
+      <pre><code>aws-cost-report generate --group-by="TAG:Environment" --filter="Untagged"</code></pre>
+
+      <h4>3. Track Untagged Cost Trends Month-over-Month</h4>
+      <p>Add <code>--compare</code> to evaluate whether untagged spend is increasing or decreasing compared to previous periods:</p>
+      <pre><code>aws-cost-report generate --group-by="TAG:Environment" --filter="Untagged" --compare</code></pre>
+
+      <div class="card" style="margin: 20px 0; background-color: var(--code-bg); border-left: 4px solid var(--primary);">
+        <h4 style="margin-top: 0;">📌 Key Considerations</h4>
+        <ul style="margin-bottom: 0; padding-left: 20px;">
+          <li><strong>Tag Activation:</strong> The tag key (e.g., <code>Environment</code>, <code>Owner</code>, <code>Project</code>) must be activated as a Cost Allocation Tag in the AWS Billing and Cost Management console before Cost Explorer can track or group by it.</li>
+          <li><strong>Evaluated Per Tag Key:</strong> AWS Cost Explorer does not provide a global "completely untagged" dimension across all potential tags simultaneously; grouping evaluates untagged resources for the specific tag key requested (e.g., <code>TAG:Environment</code>, <code>TAG:CostCenter</code>).</li>
+          <li><strong>Cost Aggregation vs. Resource IDs:</strong> The tool reports aggregate monetary figures (e.g., <code>$450.00</code> on <code>Untagged / Other</code>), but does not enumerate individual resource ARNs or IDs (which would require AWS Config or the AWS Resource Groups Tagging API).</li>
+        </ul>
+      </div>
+
       <h3>Budget Guardrail</h3>
       <pre><code>aws-cost-report generate --threshold=50.00
 # Returns exit code 1 if total cost exceeds $50.00</code></pre>

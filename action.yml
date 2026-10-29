@@ -31,7 +31,7 @@ inputs:
     required: false
     default: ''
   group-by:
-    description: 'Grouping dimension (SERVICE, LINKED_ACCOUNT, or TAG:<Key>)'
+    description: 'Grouping dimension: SERVICE (default), LINKED_ACCOUNT, or TAG:<Key> (e.g. TAG:Environment to track Untagged / Other costs)'
     required: false
     default: 'SERVICE'
   filter:

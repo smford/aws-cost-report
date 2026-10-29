@@ -10,8 +10,8 @@ defaults:
     - "AmortizedCost"
 
 grouping:
-  type: "DIMENSION" # DIMENSION or TAG
-  key: "SERVICE"    # SERVICE, LINKED_ACCOUNT, or Tag Key
+  type: "DIMENSION" # DIMENSION or TAG (e.g. type: "TAG", key: "Environment" to group by tag and identify Untagged / Other costs)
+  key: "SERVICE"    # SERVICE, LINKED_ACCOUNT, or Cost Allocation Tag Key
 
 budget:
   fail_on_threshold: 0.00 # 0.00 disables exit-1 behavior

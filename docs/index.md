@@ -51,6 +51,7 @@ jobs:
 | `compare` | Enable Month-over-Month comparison | `true` |
 | `format` | Output format (`markdown`, `table`, `json`, `csv`) | `markdown` |
 | `filter` | Filter services by official name, alias, or substring | `""` |
+| `group-by` | Grouping dimension (`SERVICE`, `LINKED_ACCOUNT`, `TAG:<Key>`) | `SERVICE` |
 | `tag` | Filter costs by AWS Cost Allocation Tag (e.g. `Environment=Production`) | `""` |
 | `threshold` | Budget threshold dollar amount | `""` |
 | `fail-on-threshold` | Fail step if budget threshold exceeded | `true` |
@@ -103,4 +104,45 @@ aws-cost-report generate --tag="Environment=Production" --tag="Project=FinOps"
 # Combine tag filtering with account or secondary tag grouping
 aws-cost-report generate --tag="Environment=Production" --group-by="LINKED_ACCOUNT"
 aws-cost-report generate --tag="Environment=Production" --group-by="TAG:Owner"
+
+# Identify untagged resource costs for a specific tag
+aws-cost-report generate --group-by="TAG:Environment" --filter="Untagged" --compare
 ```
+
+---
+
+## How to Identify Untagged Costs
+
+When grouping costs by an AWS Cost Allocation Tag dimension, AWS Cost Explorer aggregates all resources missing that tag into an empty tag key value. `aws-cost-report` automatically detects this and maps it to **`Untagged / Other`**.
+
+### 1. View Breakdown of All Tag Values (Including Untagged Spend)
+
+```bash
+aws-cost-report generate --group-by="TAG:Environment"
+```
+
+In the generated report table, you will see a line item named `Untagged / Other` reflecting all costs incurred by resources lacking the `Environment` tag.
+
+### 2. Isolate Only the Untagged Costs
+
+Use the `--filter` option to match the untagged line item:
+
+```bash
+aws-cost-report generate --group-by="TAG:Environment" --filter="Untagged"
+```
+
+The report totals dynamically recalculate to show the exact total spend attributed to untagged resources.
+
+### 3. Track Untagged Cost Trends Month-over-Month
+
+Add `--compare` to see whether untagged spend is increasing or decreasing compared to the previous period:
+
+```bash
+aws-cost-report generate --group-by="TAG:Environment" --filter="Untagged" --compare
+```
+
+### Key Considerations
+
+1. **Tag Activation**: The tag key (e.g. `Environment`, `Owner`, `Project`) must be activated as an active **Cost Allocation Tag** in the AWS Billing and Cost Management console before Cost Explorer can track or group by it.
+2. **Evaluated Per Tag Key**: AWS Cost Explorer does not have a global "completely untagged" dimension across all potential tags simultaneously; grouping evaluates untagged resources for the specific tag key requested (e.g., `TAG:Environment`, `TAG:CostCenter`).
+3. **Cost Aggregation vs. Resource IDs**: The tool reports aggregate monetary figures (e.g., `$450.00` on `Untagged / Other`), but does not enumerate individual resource ARNs or IDs (which would require AWS Config or the AWS Resource Groups Tagging API).

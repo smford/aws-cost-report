@@ -94,19 +94,22 @@ EXAMPLES:
   # 7. Group tag-filtered costs by linked account or sub-tag
   aws-cost-report generate --tag="Environment=Production" --group-by=LINKED_ACCOUNT
 
-  # 8. List all official AWS service names available in Cost Explorer
+  # 8. Identify costs of untagged resources for a specific tag key
+  aws-cost-report generate --group-by="TAG:Environment" --filter="Untagged" --compare
+
+  # 9. List all official AWS service names available in Cost Explorer
   aws-cost-report services
 
-  # 9. Top 5 cost drivers with remainder aggregated into "Other Services"
+  # 10. Top 5 cost drivers with remainder aggregated into "Other Services"
   aws-cost-report generate --compare --top=5
 
-  # 10. CI/CD budget guardrail in GitHub Actions with Step Summary
+  # 11. CI/CD budget guardrail in GitHub Actions with Step Summary
   aws-cost-report generate --compare --format=markdown --threshold=500.00
 
-  # 11. Offline test mode with tag filtering simulation
+  # 12. Offline test mode with tag filtering simulation
   aws-cost-report generate --mock --tag="Environment=Production" --compare
 
-  # 12. Start HTTP microservice daemon
+  # 13. Start HTTP microservice daemon
   aws-cost-report server --port=8080
 
 Use "aws-cost-report <command> --help" for more information about a command.

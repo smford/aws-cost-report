@@ -207,21 +207,49 @@ aws-cost-report generate --group-by="TAG:Environment"
 aws-cost-report generate --group-by="LINKED_ACCOUNT"
 ```
 
-### 7. Top N Cost Drivers
+### 7. How to Identify Untagged Costs
+When you group costs by an AWS Cost Allocation Tag dimension, AWS Cost Explorer aggregates all resources missing that tag into an empty tag key value. `aws-cost-report` automatically detects this and maps it to **`Untagged / Other`**.
+
+#### 1. View Breakdown of All Tag Values (Including Untagged Spend)
+```bash
+aws-cost-report generate --group-by="TAG:Environment"
+```
+In the generated report table, you will see a line item named `Untagged / Other` reflecting all costs incurred by resources lacking the `Environment` tag.
+
+#### 2. Isolate Only the Untagged Costs
+Use the `--filter` option to match the untagged line item:
+```bash
+aws-cost-report generate --group-by="TAG:Environment" --filter="Untagged"
+```
+The report totals dynamically recalculate to show the exact total spend attributed to untagged resources.
+
+#### 3. Track Untagged Cost Trends Month-over-Month
+Add `--compare` to see whether untagged spend is increasing or decreasing compared to the previous period:
+```bash
+aws-cost-report generate --group-by="TAG:Environment" --filter="Untagged" --compare
+```
+
+> [!NOTE]
+> **Key Considerations for Untagged Cost Tracking**:
+> 1. **Tag Activation**: The tag key (e.g. `Environment`, `Owner`, `Project`) must be activated as an active **Cost Allocation Tag** in the AWS Billing and Cost Management console before Cost Explorer can track or group by it.
+> 2. **Evaluated Per Tag Key**: AWS Cost Explorer does not have a global "completely untagged" dimension across all potential tags simultaneously; grouping evaluates untagged resources for the specific tag key requested (e.g., `TAG:Environment`, `TAG:CostCenter`).
+> 3. **Cost Aggregation vs. Resource IDs**: The tool reports aggregate monetary figures (e.g., `$450.00` on `Untagged / Other`), but does not enumerate individual resource ARNs or IDs (which would require AWS Config or the AWS Resource Groups Tagging API).
+
+### 8. Top N Cost Drivers
 Highlight the largest cost drivers and consolidate all smaller workloads into `"Other Services"`:
 
 ```bash
 aws-cost-report generate --compare --top=5
 ```
 
-### 8. Explicit Date Range
+### 9. Explicit Date Range
 Query custom date intervals (for custom ranges, comparison periods match the exact duration in days):
 
 ```bash
 aws-cost-report generate --start=2026-08-01 --end=2026-09-30
 ```
 
-### 9. SRE Budget Guardrail (CI/CD Quality Gate)
+### 10. SRE Budget Guardrail (CI/CD Quality Gate)
 Exit with status code `1` if total unblended cost exceeds threshold:
 
 ```bash
@@ -229,7 +257,7 @@ aws-cost-report generate --threshold=50.00
 echo $? # Returns 1 if total cost > $50.00, or 0 if within budget
 ```
 
-### 10. Export to JSON or CSV
+### 11. Export to JSON or CSV
 
 ```bash
 # JSON output for jq or downstream processing
@@ -239,7 +267,7 @@ aws-cost-report generate --format=json > monthly-costs.json
 aws-cost-report generate --format=csv > monthly-costs.csv
 ```
 
-### 11. Multi-Currency Support (Auto-Detected & Configurable)
+### 12. Multi-Currency Support (Auto-Detected & Configurable)
 `aws-cost-report` automatically detects your AWS account's billing currency (`EUR`, `GBP`, `JPY`, `AUD`, `CAD`, `USD`, etc.) from the AWS Cost Explorer API response and dynamically renders the corresponding symbols (`€`, `£`, `¥`, `A$`, `CA$`, `$`) and headers (`Diff (€)`, `Delta (£)`).
 
 You can also explicitly set or override the currency:
