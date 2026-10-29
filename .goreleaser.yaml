@@ -55,7 +55,7 @@ checksum:
 
 signs:
   - id: cosign
-    cmd: cosign
+    cmd: ./scripts/cosign-sign.sh
     signature: "${artifact}.sigstore.json"
     artifacts: checksum
     args:
@@ -66,7 +66,7 @@ signs:
 
 docker_signs:
   - id: cosign
-    cmd: cosign
+    cmd: ./scripts/cosign-sign.sh
     artifacts: all
     args:
       - "sign"
