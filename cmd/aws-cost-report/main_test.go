@@ -6,7 +6,9 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/smford/aws-cost-report/internal/awsclient"
 	"github.com/smford/aws-cost-report/internal/config"
 )
 
@@ -244,4 +246,33 @@ func TestRunListServicesMock(t *testing.T) {
 
 	// Should not panic or error
 	runListServices(cfg)
+}
+
+func TestReportCacheEvictionAndKeys(t *testing.T) {
+	cache := newReportCache(50*time.Millisecond, 3)
+
+	rep1 := &awsclient.CostReport{}
+	rep2 := &awsclient.CostReport{}
+	rep3 := &awsclient.CostReport{}
+	rep4 := &awsclient.CostReport{}
+
+	cache.Set("k1", rep1)
+	cache.Set("k2", rep2)
+	cache.Set("k3", rep3)
+
+	if got, ok := cache.Get("k1"); !ok || got != rep1 {
+		t.Errorf("expected k1 to be present")
+	}
+
+	// Adding 4th item when max is 3 triggers eviction
+	cache.Set("k4", rep4)
+	if got, ok := cache.Get("k4"); !ok || got != rep4 {
+		t.Errorf("expected k4 to be present")
+	}
+
+	// Verify TTL expiration
+	time.Sleep(60 * time.Millisecond)
+	if _, ok := cache.Get("k4"); ok {
+		t.Errorf("expected k4 to have expired")
+	}
 }

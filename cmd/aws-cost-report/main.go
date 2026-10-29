@@ -324,9 +324,10 @@ func runCLI(cfg *config.Config) {
 }
 
 type reportCache struct {
-	mu      sync.RWMutex
-	entries map[string]cacheEntry
-	ttl     time.Duration
+	mu         sync.RWMutex
+	entries    map[string]cacheEntry
+	ttl        time.Duration
+	maxEntries int
 }
 
 type cacheEntry struct {
@@ -334,10 +335,15 @@ type cacheEntry struct {
 	expiresAt time.Time
 }
 
-func newReportCache(ttl time.Duration) *reportCache {
+func newReportCache(ttl time.Duration, maxEntries ...int) *reportCache {
+	limit := 500
+	if len(maxEntries) > 0 && maxEntries[0] > 0 {
+		limit = maxEntries[0]
+	}
 	return &reportCache{
-		entries: make(map[string]cacheEntry),
-		ttl:     ttl,
+		entries:    make(map[string]cacheEntry),
+		ttl:        ttl,
+		maxEntries: limit,
 	}
 }
 
@@ -354,9 +360,27 @@ func (c *reportCache) Get(key string) (*awsclient.CostReport, bool) {
 func (c *reportCache) Set(key string, report *awsclient.CostReport) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
+	now := time.Now()
+	// Prune expired entries if map reaches capacity
+	if len(c.entries) >= c.maxEntries {
+		for k, v := range c.entries {
+			if now.After(v.expiresAt) {
+				delete(c.entries, k)
+			}
+		}
+		// If still at capacity, evict an entry to bound memory
+		if len(c.entries) >= c.maxEntries {
+			for k := range c.entries {
+				delete(c.entries, k)
+				break
+			}
+		}
+	}
+
 	c.entries[key] = cacheEntry{
 		report:    report,
-		expiresAt: time.Now().Add(c.ttl),
+		expiresAt: now.Add(c.ttl),
 	}
 }
 
@@ -502,11 +526,12 @@ func runServer(cfg *config.Config) {
 			config.ParseTagFilterString(tagVal, reqCfg.TagFilters)
 		}
 
-		cacheKey := fmt.Sprintf("%v:%s:%s:%d:%s:%v:%s:%d:%.2f",
+		cacheKey := fmt.Sprintf("%v:%s:%s:%d:%s:%v:%s:%d:%.2f:%v:%s:%s",
 			reqCfg.CompareMoM, reqCfg.StartDate, reqCfg.EndDate,
 			reqCfg.MonthsBack, reqCfg.Grouping.Key, reqCfg.Filters,
 			reqCfg.TagFilters.Format(),
-			reqCfg.Defaults.Top, reqCfg.Defaults.MinDisplayCost)
+			reqCfg.Defaults.Top, reqCfg.Defaults.MinDisplayCost,
+			reqCfg.Monthly, reqCfg.AccountName, reqCfg.Defaults.Currency)
 
 		report, ok := cache.Get(cacheKey)
 		if !ok {
