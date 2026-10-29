@@ -2,8 +2,29 @@ name: Release
 
 on:
   push:
+    branches:
+      - main
     tags:
       - 'v*.*.*'
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+      - '.github/workflows/pages.yml'
+      - '.github/workflows/gh-stats.yml'
+      - '.gh-stats.yml'
+      - '.gitignore'
+      - 'LICENSE'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag/version to release (e.g. v0.2.0, leave empty to auto-calculate)'
+        required: false
+        type: string
+        default: ''
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -20,6 +41,59 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve and Create Tag
+        id: resolve_tag
+        run: |
+          git fetch --tags --force
+
+          if [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
+            TAG_NAME="${GITHUB_REF#refs/tags/}"
+          elif [ -n "${{ inputs.tag }}" ]; then
+            TAG_NAME="${{ inputs.tag }}"
+          else
+            HEAD_TAG=$(git tag --points-at HEAD | head -n1 || true)
+            if [ -n "$HEAD_TAG" ]; then
+              TAG_NAME="$HEAD_TAG"
+            else
+              LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+              CLEAN_TAG="${LATEST_TAG#v}"
+              MAJOR=$(echo "$CLEAN_TAG" | cut -d. -f1)
+              MINOR=$(echo "$CLEAN_TAG" | cut -d. -f2)
+              PATCH=$(echo "$CLEAN_TAG" | cut -d. -f3)
+
+              COMMITS=$(git log "${LATEST_TAG}..HEAD" --pretty=format:"%s%n%b" 2>/dev/null || git log --pretty=format:"%s%n%b")
+
+              if echo "$COMMITS" | grep -qE "(BREAKING CHANGE|^[a-zA-Z]+(\([^\)]+\))?!:)"; then
+                MAJOR=$((MAJOR + 1))
+                MINOR=0
+                PATCH=0
+              elif echo "$COMMITS" | grep -qE "^feat(\([^\)]+\))?:"; then
+                MINOR=$((MINOR + 1))
+                PATCH=0
+              else
+                PATCH=$((PATCH + 1))
+              fi
+
+              TAG_NAME="v${MAJOR}.${MINOR}.${PATCH}"
+            fi
+          fi
+
+          VERSION="${TAG_NAME#v}"
+          echo "tag=${TAG_NAME}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Release target tag: ${TAG_NAME} (version: ${VERSION})"
+
+          if ! git tag --points-at HEAD | grep -qx "$TAG_NAME"; then
+            echo "Tagging HEAD as ${TAG_NAME}..."
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git tag -a "$TAG_NAME" -m "Release ${TAG_NAME}"
+            git push origin "$TAG_NAME"
+          else
+            echo "HEAD is already tagged as ${TAG_NAME}."
+          fi
 
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -55,24 +129,22 @@ jobs:
       - name: Generate Homebrew Formula
         id: formula
         run: |
-          TAG_NAME="${GITHUB_REF#refs/tags/}"
-          VERSION="${TAG_NAME#v}"
-          echo "tag=${TAG_NAME}" >> "$GITHUB_OUTPUT"
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          TAG_NAME="${{ steps.resolve_tag.outputs.tag }}"
+          VERSION="${{ steps.resolve_tag.outputs.version }}"
           chmod +x scripts/generate_formula.sh
           ./scripts/generate_formula.sh "$VERSION" "$TAG_NAME" "dist" "dist/aws-cost-report.rb"
 
       - name: Upload Formula to Release Assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG_NAME: ${{ steps.formula.outputs.tag }}
+          TAG_NAME: ${{ steps.resolve_tag.outputs.tag }}
         run: |
           gh release upload "$TAG_NAME" dist/aws-cost-report.rb --clobber
 
       - name: Publish Homebrew Formula to Tap
         env:
           TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
-          TAG_NAME: ${{ steps.formula.outputs.tag }}
+          TAG_NAME: ${{ steps.resolve_tag.outputs.tag }}
         run: |
           if [ -n "${TAP_TOKEN}" ]; then
             echo "Publishing updated formula to smford/homebrew-tap..."
@@ -98,7 +170,7 @@ jobs:
       - name: Trigger GitHub Pages Deployment
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG_NAME: ${{ steps.formula.outputs.tag }}
+          TAG_NAME: ${{ steps.resolve_tag.outputs.tag }}
         run: |
           echo "Triggering GitHub Pages deployment for ${TAG_NAME}..."
           gh workflow run pages.yml -f version="${TAG_NAME}" || true
