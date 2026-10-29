@@ -50,6 +50,14 @@ inputs:
     description: 'Minimum cost threshold to display'
     required: false
     default: ''
+  top:
+    description: 'Show top N highest cost items and aggregate remainder into Other'
+    required: false
+    default: ''
+  slack-webhook:
+    description: 'Incoming Slack webhook URL to post formatted cost report'
+    required: false
+    default: ''
   write-summary:
     description: 'Whether to write markdown report to GitHub Step Summary ($GITHUB_STEP_SUMMARY)'
     required: false
@@ -203,6 +211,14 @@ runs:
 
         if [ -n "${{ inputs.min-cost }}" ]; then
           ARGS+=("--min-cost=${{ inputs.min-cost }}")
+        fi
+
+        if [ -n "${{ inputs.top }}" ]; then
+          ARGS+=("--top=${{ inputs.top }}")
+        fi
+
+        if [ -n "${{ inputs.slack-webhook }}" ]; then
+          ARGS+=("--slack-webhook=${{ inputs.slack-webhook }}")
         fi
 
         if [ "${{ inputs.write-summary }}" = "true" ]; then

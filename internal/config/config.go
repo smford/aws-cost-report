@@ -11,12 +11,14 @@ import (
 
 // Config represents the complete application configuration.
 type Config struct {
-	Version   string          `yaml:"version"`
-	Defaults  DefaultsConfig  `yaml:"defaults"`
-	Grouping  GroupingConfig  `yaml:"grouping"`
-	Budget    BudgetConfig    `yaml:"budget"`
-	Reporting ReportingConfig `yaml:"reporting"`
-	Server    ServerConfig    `yaml:"server"`
+	Version      string            `yaml:"version"`
+	Defaults     DefaultsConfig    `yaml:"defaults"`
+	Grouping     GroupingConfig    `yaml:"grouping"`
+	Budget       BudgetConfig      `yaml:"budget"`
+	Reporting    ReportingConfig   `yaml:"reporting"`
+	Server       ServerConfig      `yaml:"server"`
+	Accounts     map[string]string `yaml:"accounts"`
+	SlackWebhook string            `yaml:"slack_webhook"`
 
 	// Runtime options resolved from CLI flags or env
 	ConfigFile      string   `yaml:"-"`
@@ -39,6 +41,7 @@ type DefaultsConfig struct {
 	Currency       string   `yaml:"currency"`
 	MonthsBack     int      `yaml:"months_back"`
 	MinDisplayCost float64  `yaml:"min_display_cost"`
+	Top            int      `yaml:"top"`
 	Metrics        []string `yaml:"metrics"`
 }
 
@@ -125,6 +128,8 @@ func LoadConfig(args []string) (*Config, error) {
 		outputFlag   = fs.String("output", "", "Optional file path to write report output")
 		outputSh     = fs.String("o", "", "Optional file path to write report output (shorthand)")
 		jsonSumFlag  = fs.String("json-summary", "", "Optional file path to write machine-readable summary JSON")
+		topFlag      = fs.Int("top", 0, "Show top N highest cost items and aggregate remainder into Other")
+		slackFlag    = fs.String("slack-webhook", "", "Incoming Slack webhook URL to post formatted cost report")
 	)
 
 	if err := fs.Parse(args); err != nil {
@@ -203,6 +208,14 @@ func LoadConfig(args []string) (*Config, error) {
 
 	if *minCost >= 0.0 {
 		cfg.Defaults.MinDisplayCost = *minCost
+	}
+
+	if *topFlag > 0 {
+		cfg.Defaults.Top = *topFlag
+	}
+
+	if *slackFlag != "" {
+		cfg.SlackWebhook = *slackFlag
 	}
 
 	if *compareMoM {

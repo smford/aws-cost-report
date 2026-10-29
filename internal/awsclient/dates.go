@@ -94,30 +94,54 @@ func ResolveTimePeriod(now time.Time, monthsBack int, startStr, endStr string) (
 	}, nil
 }
 
-// ResolvePreviousPeriod calculates the identical preceding timeframe for Month-over-Month comparison.
+// ResolvePreviousPeriod calculates the identical preceding timeframe for comparison.
+// For full-month intervals, it preserves exact calendar month boundaries.
+// For arbitrary custom day ranges, it preserves identical day duration.
 func ResolvePreviousPeriod(current *DateRange) *DateRange {
-	// Duration in months
-	// Count months between start and endExclusiveAWS
-	yearDiff := current.EndExclusiveAWS.Year() - current.Start.Year()
-	monthDiff := int(current.EndExclusiveAWS.Month()) - int(current.Start.Month()) + (yearDiff * 12)
-	if monthDiff <= 0 {
-		monthDiff = 1
+	// Check if current period represents whole calendar months
+	isFullMonth := current.Start.Day() == 1 && current.EndExclusiveAWS.Day() == 1
+
+	if isFullMonth {
+		yearDiff := current.EndExclusiveAWS.Year() - current.Start.Year()
+		monthDiff := int(current.EndExclusiveAWS.Month()) - int(current.Start.Month()) + (yearDiff * 12)
+		if monthDiff <= 0 {
+			monthDiff = 1
+		}
+
+		prevStart := current.Start.AddDate(0, -monthDiff, 0)
+		prevExclusiveAWS := current.Start
+		prevInclusive := prevExclusiveAWS.AddDate(0, 0, -1)
+
+		monthDesc := prevStart.Format("January 2006")
+		if monthDiff > 1 {
+			monthDesc = fmt.Sprintf("%s - %s", prevStart.Format("January 2006"), prevInclusive.Format("January 2006"))
+		}
+
+		return &DateRange{
+			Start:            prevStart,
+			EndInclusive:     prevInclusive,
+			EndExclusiveAWS:  prevExclusiveAWS,
+			BillingMonthDesc: monthDesc,
+			IsEstimated:      false,
+		}
 	}
 
-	prevStart := current.Start.AddDate(0, -monthDiff, 0)
+	// For arbitrary custom date spans, shift back by identical duration in days
+	days := int(current.EndExclusiveAWS.Sub(current.Start).Hours() / 24)
+	if days <= 0 {
+		days = 1
+	}
+
 	prevExclusiveAWS := current.Start
+	prevStart := prevExclusiveAWS.AddDate(0, 0, -days)
 	prevInclusive := prevExclusiveAWS.AddDate(0, 0, -1)
-
-	monthDesc := prevStart.Format("January 2006")
-	if monthDiff > 1 {
-		monthDesc = fmt.Sprintf("%s - %s", prevStart.Format("January 2006"), prevInclusive.Format("January 2006"))
-	}
+	periodDesc := fmt.Sprintf("%s to %s", prevStart.Format(DateFormat), prevInclusive.Format(DateFormat))
 
 	return &DateRange{
 		Start:            prevStart,
 		EndInclusive:     prevInclusive,
 		EndExclusiveAWS:  prevExclusiveAWS,
-		BillingMonthDesc: monthDesc,
+		BillingMonthDesc: periodDesc,
 		IsEstimated:      false,
 	}
 }

@@ -205,3 +205,53 @@ func TestThrottlingRetry(t *testing.T) {
 		t.Errorf("expected exactly 2 attempts, got %d", ceMock.attempts)
 	}
 }
+
+func TestTopNAggregation(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.MockMode = true
+	cfg.Defaults.Top = 3
+
+	refTime := time.Date(2026, time.October, 28, 12, 0, 0, 0, time.UTC)
+	report, err := GenerateMockReport(cfg, refTime)
+	if err != nil {
+		t.Fatalf("GenerateMockReport failed: %v", err)
+	}
+
+	// 3 top items + 1 "Other Services" item = 4
+	if len(report.Items) != 4 {
+		t.Fatalf("expected 4 items (3 top + Other), got %d", len(report.Items))
+	}
+
+	if report.Items[3].Name != "Other Services" {
+		t.Errorf("expected last item to be 'Other Services', got %s", report.Items[3].Name)
+	}
+
+	// Sum of all items should match unblended total cost
+	var sum float64
+	for _, item := range report.Items {
+		sum += item.UnblendedCost
+	}
+	sum = roundToTwo(sum)
+	if sum != report.Totals.UnblendedCost {
+		t.Errorf("expected sum of items (%.2f) to equal total unblended cost (%.2f)", sum, report.Totals.UnblendedCost)
+	}
+}
+
+func TestAccountMapping(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.MockMode = true
+	cfg.Accounts = map[string]string{
+		"715195480427": "Production Core",
+	}
+
+	refTime := time.Date(2026, time.October, 28, 12, 0, 0, 0, time.UTC)
+	report, err := GenerateMockReport(cfg, refTime)
+	if err != nil {
+		t.Fatalf("GenerateMockReport failed: %v", err)
+	}
+
+	expected := "715195480427 (Production Core)"
+	if report.Metadata.AccountID != expected {
+		t.Errorf("expected account ID %q, got %q", expected, report.Metadata.AccountID)
+	}
+}

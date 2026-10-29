@@ -98,11 +98,13 @@ reporting:
 		t.Errorf("expected CompareMoM true")
 	}
 
-	// Test 3: Test threshold alias, output and json-summary flags
+	// Test 3: Test threshold alias, output, json-summary, top, and slack-webhook flags
 	extraArgs := []string{
 		"--threshold", "750.50",
 		"--output", "/tmp/report.md",
 		"--json-summary", "/tmp/summary.json",
+		"--top", "5",
+		"--slack-webhook", "https://hooks.slack.com/services/test",
 	}
 	cfgExtra, err := LoadConfig(extraArgs)
 	if err != nil {
@@ -116,5 +118,11 @@ reporting:
 	}
 	if cfgExtra.JSONSummaryFile != "/tmp/summary.json" {
 		t.Errorf("expected JSONSummaryFile /tmp/summary.json, got %s", cfgExtra.JSONSummaryFile)
+	}
+	if cfgExtra.Defaults.Top != 5 {
+		t.Errorf("expected Top 5, got %d", cfgExtra.Defaults.Top)
+	}
+	if cfgExtra.SlackWebhook != "https://hooks.slack.com/services/test" {
+		t.Errorf("expected SlackWebhook, got %s", cfgExtra.SlackWebhook)
 	}
 }

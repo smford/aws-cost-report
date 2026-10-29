@@ -121,6 +121,29 @@ func TestRenderMarkdownBudgetAlert(t *testing.T) {
 	}
 }
 
+func TestRenderMarkdownComparison(t *testing.T) {
+	report := getTestReport(true)
+	var buf bytes.Buffer
+	err := RenderMarkdown(&buf, report, false, 0.00)
+	if err != nil {
+		t.Fatalf("RenderMarkdown comparison failed: %v", err)
+	}
+
+	out := buf.String()
+	// Test positive delta formatting: +$0.31 | +5.96%
+	if !strings.Contains(out, "+$0.31 | +5.96%") {
+		t.Errorf("expected +$0.31 | +5.96%% in markdown output, got:\n%s", out)
+	}
+	// Test negative delta formatting: -$0.07 | -1.46% (not $-0.07)
+	if !strings.Contains(out, "-$0.07 | -1.46%") {
+		t.Errorf("expected -$0.07 | -1.46%% in markdown output, got:\n%s", out)
+	}
+	// Test zero delta formatting: $0.00 | 0.00%
+	if !strings.Contains(out, "$0.00 | 0.00%") {
+		t.Errorf("expected $0.00 | 0.00%% for zero delta items, got:\n%s", out)
+	}
+}
+
 func TestRenderJSON(t *testing.T) {
 	report := getTestReport(false)
 	var buf bytes.Buffer

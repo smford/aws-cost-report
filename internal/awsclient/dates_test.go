@@ -105,3 +105,21 @@ func TestResolvePreviousPeriod(t *testing.T) {
 		t.Errorf("expected prev description August 2026, got %s", prev.BillingMonthDesc)
 	}
 }
+
+func TestResolvePreviousPeriodCustomRange(t *testing.T) {
+	refTime := time.Date(2026, time.October, 28, 14, 0, 0, 0, time.UTC)
+	// 10-day custom span: 2026-10-11 to 2026-10-20 (inclusive)
+	current, err := ResolveTimePeriod(refTime, 0, "2026-10-11", "2026-10-20")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	prev := ResolvePreviousPeriod(current)
+	// Prior 10 days should end on 2026-10-10 and start on 2026-10-01
+	if prev.EndInclusive.Format(DateFormat) != "2026-10-10" {
+		t.Errorf("expected prev inclusive end 2026-10-10, got %s", prev.EndInclusive.Format(DateFormat))
+	}
+	if prev.Start.Format(DateFormat) != "2026-10-01" {
+		t.Errorf("expected prev start 2026-10-01, got %s", prev.Start.Format(DateFormat))
+	}
+}

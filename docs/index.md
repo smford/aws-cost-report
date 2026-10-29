@@ -52,6 +52,8 @@ jobs:
 | `format` | Output format (`markdown`, `table`, `json`, `csv`) | `markdown` |
 | `threshold` | Budget threshold dollar amount | `""` |
 | `fail-on-threshold` | Fail step if budget threshold exceeded | `true` |
+| `top` | Show top N highest cost items and aggregate remainder into Other | `""` |
+| `slack-webhook` | Incoming Slack webhook URL for automated ChatOps | `""` |
 | `write-summary` | Write report to `$GITHUB_STEP_SUMMARY` | `true` |
 | `mock` | Run offline with synthetic dataset | `false` |
 | `output-file` | Optional path to save output file | `""` |

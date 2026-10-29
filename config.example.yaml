@@ -3,6 +3,7 @@ defaults:
   currency: "USD"
   months_back: 1
   min_display_cost: 0.01
+  top: 10 # 0 displays all, >0 displays top N and aggregates remainder into "Other"
   metrics:
     - "UnblendedCost"
     - "BlendedCost"
@@ -18,3 +19,11 @@ budget:
 reporting:
   format: "table" # table, markdown, json, csv
   write_job_summary: true
+
+# Friendly account aliases for LINKED_ACCOUNT grouping and metadata display
+accounts:
+  "123456789012": "Production Core"
+  "987654321098": "Staging / QA"
+
+# Optional Slack webhook integration for ChatOps
+slack_webhook: ""

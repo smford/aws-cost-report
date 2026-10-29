@@ -58,6 +58,26 @@ func NewRealClient(ctx context.Context) (*Client, error) {
 	return NewClient(ceClient, stsClient), nil
 }
 
+// HasSTS returns true if an STS client is configured.
+func (c *Client) HasSTS() bool {
+	return c.stsClient != nil
+}
+
+// VerifySTS queries GetCallerIdentity to verify AWS credential resolution.
+func (c *Client) VerifySTS(ctx context.Context) (string, error) {
+	if c.stsClient == nil {
+		return "", fmt.Errorf("STS client not configured")
+	}
+	callerID, err := c.stsClient.GetCallerIdentity(ctx, &sts.GetCallerIdentityInput{})
+	if err != nil {
+		return "", err
+	}
+	if callerID.Account != nil {
+		return *callerID.Account, nil
+	}
+	return "unknown", nil
+}
+
 // GenerateReport queries AWS Cost Explorer according to the provided configuration and returns a CostReport.
 func (c *Client) GenerateReport(ctx context.Context, cfg *config.Config, now time.Time) (*CostReport, error) {
 	if cfg.MockMode {
@@ -224,6 +244,17 @@ func (c *Client) GenerateReport(ctx context.Context, cfg *config.Config, now tim
 		return filtered[i].Name < filtered[j].Name
 	})
 
+	// Apply account alias mapping if configured
+	if strings.EqualFold(cfg.Grouping.Key, "LINKED_ACCOUNT") {
+		for i := range filtered {
+			filtered[i].Name = resolveAccountName(filtered[i].Name, cfg.Accounts)
+		}
+	}
+	report.Metadata.AccountID = resolveAccountName(accountID, cfg.Accounts)
+
+	// Apply Top N aggregation if configured
+	filtered = applyTopNAggregation(filtered, cfg.Defaults.Top, cfg.Grouping.Key)
+
 	report.Items = filtered
 	report.Metadata.ActiveServices = len(filtered)
 
@@ -372,9 +403,17 @@ func GenerateMockReport(cfg *config.Config, now time.Time) (*CostReport, error) 
 		}
 	}
 
+	mockAccountID := resolveAccountName("715195480427", cfg.Accounts)
+	if strings.EqualFold(cfg.Grouping.Key, "LINKED_ACCOUNT") {
+		for i := range filtered {
+			filtered[i].Name = resolveAccountName(filtered[i].Name, cfg.Accounts)
+		}
+	}
+	filtered = applyTopNAggregation(filtered, cfg.Defaults.Top, cfg.Grouping.Key)
+
 	report := &CostReport{
 		Metadata: ReportMetadata{
-			AccountID:        "715195480427",
+			AccountID:        mockAccountID,
 			BillingMonth:     dateRange.BillingMonthDesc,
 			PeriodStart:      dateRange.Start.Format(DateFormat),
 			PeriodEnd:        dateRange.EndInclusive.Format(DateFormat),
@@ -458,4 +497,61 @@ func (c *Client) getCostAndUsageWithRetry(ctx context.Context, input *costexplor
 		return nil, err
 	}
 	return nil, fmt.Errorf("exhausted retries")
+}
+
+func applyTopNAggregation(items []LineItem, top int, groupKey string) []LineItem {
+	if top <= 0 || len(items) <= top {
+		return items
+	}
+
+	topItems := make([]LineItem, top)
+	copy(topItems, items[:top])
+
+	otherLabel := "Other"
+	if groupKey == "" || strings.EqualFold(groupKey, "SERVICE") {
+		otherLabel = "Other Services"
+	} else if strings.EqualFold(groupKey, "LINKED_ACCOUNT") {
+		otherLabel = "Other Accounts"
+	}
+
+	other := LineItem{Name: otherLabel}
+	hasPrev := false
+
+	for _, rem := range items[top:] {
+		other.UnblendedCost += rem.UnblendedCost
+		other.BlendedCost += rem.BlendedCost
+		other.AmortizedCost += rem.AmortizedCost
+		if rem.HasPreviousCost {
+			hasPrev = true
+			other.PrevUnblendedCost += rem.PrevUnblendedCost
+			other.PrevBlendedCost += rem.PrevBlendedCost
+			other.PrevAmortizedCost += rem.PrevAmortizedCost
+		}
+	}
+
+	other.UnblendedCost = roundToTwo(other.UnblendedCost)
+	other.BlendedCost = roundToTwo(other.BlendedCost)
+	other.AmortizedCost = roundToTwo(other.AmortizedCost)
+	if hasPrev {
+		other.HasPreviousCost = true
+		other.PrevUnblendedCost = roundToTwo(other.PrevUnblendedCost)
+		other.PrevBlendedCost = roundToTwo(other.PrevBlendedCost)
+		other.PrevAmortizedCost = roundToTwo(other.PrevAmortizedCost)
+		other.MoMDeltaAmount = roundToTwo(other.UnblendedCost - other.PrevUnblendedCost)
+		if other.PrevUnblendedCost > 0 {
+			other.MoMDeltaPercent = roundToTwo(((other.UnblendedCost - other.PrevUnblendedCost) / other.PrevUnblendedCost) * 100.0)
+		}
+	}
+
+	return append(topItems, other)
+}
+
+func resolveAccountName(account string, accounts map[string]string) string {
+	if len(accounts) == 0 {
+		return account
+	}
+	if name, ok := accounts[account]; ok && name != "" {
+		return fmt.Sprintf("%s (%s)", account, name)
+	}
+	return account
 }

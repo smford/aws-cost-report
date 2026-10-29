@@ -69,16 +69,16 @@ A production-grade, zero-dependency (outside official AWS SDK v2 and YAML parser
  AWS Config                                 |            4.73 |           4.80 |      -0.07 |     -1.46%
  Amazon Cognito                             |            4.17 |           4.15 |      +0.02 |     +0.48%
  Tax                                        |            2.89 |           2.80 |      +0.09 |     +3.21%
- AWS Key Management Service                 |            1.00 |           1.00 |      +0.00 |     +0.00%
+ AWS Key Management Service                 |            1.00 |           1.00 |       0.00 |      0.00%
  Amazon Simple Storage Service              |            0.94 |           0.88 |      +0.06 |     +6.82%
- Amazon Route 53                            |            0.80 |           0.80 |      +0.00 |     +0.00%
+ Amazon Route 53                            |            0.80 |           0.80 |       0.00 |      0.00%
  Amazon CloudWatch                          |            0.65 |           0.70 |      -0.05 |     -7.14%
- AWS Secrets Manager                        |            0.40 |           0.40 |      +0.00 |     +0.00%
+ AWS Secrets Manager                        |            0.40 |           0.40 |       0.00 |      0.00%
  AWS Lambda                                 |            0.25 |           0.18 |      +0.07 |    +38.89%
- Amazon Virtual Private Cloud               |            0.12 |           0.12 |      +0.00 |     +0.00%
+ Amazon Virtual Private Cloud               |            0.12 |           0.12 |       0.00 |      0.00%
  Amazon Simple Notification Service         |            0.06 |           0.05 |      +0.01 |    +20.00%
  AWS Step Functions                         |            0.04 |           0.03 |      +0.01 |    +33.33%
- AWS CloudTrail                             |            0.02 |           0.02 |      +0.00 |     +0.00%
+ AWS CloudTrail                             |            0.02 |           0.02 |       0.00 |      0.00%
 ========================================================================================================
 ```
 
@@ -230,6 +230,8 @@ jobs:
 | `threshold` | SRE budget alert dollar threshold (e.g. `500.00`). Exceeding fails the step. | `""` | No |
 | `fail-on-threshold` | Whether to terminate step with failure on threshold breach (`true`/`false`) | `true` | No |
 | `min-cost` | Minimum cost floor to display in itemized breakdown | `""` | No |
+| `top` | Limit breakdown to top N cost drivers and aggregate remainder into "Other" | `""` | No |
+| `slack-webhook` | Incoming Slack webhook URL for automated ChatOps notifications | `""` | No |
 | `write-summary` | Automatically publish markdown table to `$GITHUB_STEP_SUMMARY` | `true` | No |
 | `mock` | Run with offline deterministic mock data (no AWS API calls) | `false` | No |
 | `config` | Path to custom YAML configuration file | `""` | No |
@@ -322,6 +324,7 @@ defaults:
   currency: "USD"
   months_back: 1
   min_display_cost: 0.01
+  top: 10 # 0 displays all, >0 displays top N and aggregates remainder into "Other"
   metrics:
     - "UnblendedCost"
     - "BlendedCost"
@@ -337,9 +340,32 @@ budget:
 reporting:
   format: "table" # table, markdown, json, csv
   write_job_summary: true
+
+# Friendly account aliases for LINKED_ACCOUNT grouping
+accounts:
+  "123456789012": "Production Core"
+  "987654321098": "Staging / QA"
+
+# Optional incoming Slack webhook for automated ChatOps notifications
+slack_webhook: ""
 ```
 
 *Note: Command-line flags always take precedence over values in `config.yaml`.*
+
+---
+
+## HTTP Daemon Mode (`--server`)
+
+`aws-cost-report` can run as an HTTP microservice for health monitoring, Prometheus/blackbox probes, or dynamic cost dashboards:
+
+```bash
+aws-cost-report --server --mock
+```
+
+- **`GET /healthz`**: Liveness probe returning `{"status":"ok","version":"..."}`.
+- **`GET /readyz`**: Readiness probe verifying AWS credential authentication and STS caller identity (or mock readiness).
+- **`GET /report`**: Generates reports dynamically with 15-minute in-memory caching to avoid AWS Cost Explorer rate limits (`LimitExceededException`).
+  - Supports query parameters: `?format=markdown&compare=true&top=5&months=1&group-by=SERVICE`.
 
 ---
 
@@ -386,6 +412,11 @@ To run `aws-cost-report`, the executing IAM principal requires read permissions 
 | `--filter` | `--service` | | Comma-separated list of service name substrings to filter |
 | `--metrics` | | `UnblendedCost,BlendedCost,AmortizedCost` | Cost metrics to query or `all` |
 | `--min-cost` | | `0.01` | Minimum cost threshold to display line items |
+| `--top` | | `0` | Show top N highest cost items and aggregate remainder into "Other" |
+| `--slack-webhook` | | | Incoming Slack webhook URL to post formatted cost report |
+| `--output` | `-o` | | Write formatted cost report to specified file path |
+| `--json-summary` | | | Write machine-readable JSON metrics summary to file path |
+| `--server` | | `false` | Run as an HTTP service daemon exposing `/healthz`, `/readyz`, and `/report` |
 | `--fail-on-threshold` | | `0.00` | Terminate with exit code 1 if total cost exceeds amount |
 | `--format` | | `table` | Output format: `table`, `markdown`, `json`, `csv` |
 | `--no-color` | | `false` | Disable ANSI color codes in table deltas (also honors `NO_COLOR=1`) |

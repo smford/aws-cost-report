@@ -3,6 +3,7 @@ package renderer
 import (
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"strings"
 
@@ -36,12 +37,14 @@ func RenderMarkdown(w io.Writer, r *awsclient.CostReport, writeJobSummary bool, 
 	if r.HasComparison {
 		b.WriteString("| Metric | Amount (" + r.Metadata.Currency + ") | Previous (" + r.Metadata.Currency + ") | Delta ($) | Change (%) |\n")
 		b.WriteString("|:---|---:|---:|---:|---:|\n")
-		b.WriteString(fmt.Sprintf("| **Unblended Cost** | **$%.2f** | $%.2f | %s$%.2f | %s%.2f%% |\n",
-			r.Totals.UnblendedCost, r.Totals.PrevUnblendedCost, formatSign(r.Totals.MoMDeltaAmount), r.Totals.MoMDeltaAmount, formatSign(r.Totals.MoMDeltaPercent), r.Totals.MoMDeltaPercent))
-		b.WriteString(fmt.Sprintf("| **Blended Cost** | **$%.2f** | $%.2f | %s$%.2f | %s%.2f%% |\n",
-			r.Totals.BlendedCost, r.Totals.PrevBlendedCost, formatSign(r.Totals.BlendedCost-r.Totals.PrevBlendedCost), r.Totals.BlendedCost-r.Totals.PrevBlendedCost, formatSign(calcPercent(r.Totals.BlendedCost, r.Totals.PrevBlendedCost)), calcPercent(r.Totals.BlendedCost, r.Totals.PrevBlendedCost)))
-		b.WriteString(fmt.Sprintf("| **Amortized Cost** | **$%.2f** | $%.2f | %s$%.2f | %s%.2f%% |\n\n",
-			r.Totals.AmortizedCost, r.Totals.PrevAmortizedCost, formatSign(r.Totals.AmortizedCost-r.Totals.PrevAmortizedCost), r.Totals.AmortizedCost-r.Totals.PrevAmortizedCost, formatSign(calcPercent(r.Totals.AmortizedCost, r.Totals.PrevAmortizedCost)), calcPercent(r.Totals.AmortizedCost, r.Totals.PrevAmortizedCost)))
+		b.WriteString(fmt.Sprintf("| **Unblended Cost** | **$%.2f** | $%.2f | %s | %s |\n",
+			r.Totals.UnblendedCost, r.Totals.PrevUnblendedCost, formatCurrencyDelta(r.Totals.MoMDeltaAmount), formatPercentDelta(r.Totals.MoMDeltaPercent)))
+		blendedDelta := r.Totals.BlendedCost - r.Totals.PrevBlendedCost
+		b.WriteString(fmt.Sprintf("| **Blended Cost** | **$%.2f** | $%.2f | %s | %s |\n",
+			r.Totals.BlendedCost, r.Totals.PrevBlendedCost, formatCurrencyDelta(blendedDelta), formatPercentDelta(calcPercent(r.Totals.BlendedCost, r.Totals.PrevBlendedCost))))
+		amortDelta := r.Totals.AmortizedCost - r.Totals.PrevAmortizedCost
+		b.WriteString(fmt.Sprintf("| **Amortized Cost** | **$%.2f** | $%.2f | %s | %s |\n\n",
+			r.Totals.AmortizedCost, r.Totals.PrevAmortizedCost, formatCurrencyDelta(amortDelta), formatPercentDelta(calcPercent(r.Totals.AmortizedCost, r.Totals.PrevAmortizedCost))))
 	} else {
 		b.WriteString("| Metric | Amount (" + r.Metadata.Currency + ") |\n")
 		b.WriteString("|:---|---:|\n")
@@ -61,14 +64,12 @@ func RenderMarkdown(w io.Writer, r *awsclient.CostReport, writeJobSummary bool, 
 		b.WriteString(fmt.Sprintf("| %s | Unblended (%s) | Previous (%s) | Delta ($) | Change (%%) |\n", groupLabel, r.Metadata.Currency, r.Metadata.Currency))
 		b.WriteString("|:---|---:|---:|---:|---:|\n")
 		for _, item := range r.Items {
-			b.WriteString(fmt.Sprintf("| %s | $%.2f | $%.2f | %s$%.2f | %s%.2f%% |\n",
+			b.WriteString(fmt.Sprintf("| %s | $%.2f | $%.2f | %s | %s |\n",
 				item.Name,
 				item.UnblendedCost,
 				item.PrevUnblendedCost,
-				formatSign(item.MoMDeltaAmount),
-				item.MoMDeltaAmount,
-				formatSign(item.MoMDeltaPercent),
-				item.MoMDeltaPercent,
+				formatCurrencyDelta(item.MoMDeltaAmount),
+				formatPercentDelta(item.MoMDeltaPercent),
 			))
 		}
 	} else {
@@ -105,9 +106,22 @@ func RenderMarkdown(w io.Writer, r *awsclient.CostReport, writeJobSummary bool, 
 	return nil
 }
 
-func formatSign(v float64) string {
-	if v > 0 {
-		return "+"
+func formatCurrencyDelta(v float64) string {
+	if math.Abs(v) < 0.005 {
+		return "$0.00"
 	}
-	return ""
+	if v > 0 {
+		return fmt.Sprintf("+$%.2f", v)
+	}
+	return fmt.Sprintf("-$%.2f", math.Abs(v))
+}
+
+func formatPercentDelta(v float64) string {
+	if math.Abs(v) < 0.005 {
+		return "0.00%"
+	}
+	if v > 0 {
+		return fmt.Sprintf("+%.2f%%", v)
+	}
+	return fmt.Sprintf("%.2f%%", v)
 }

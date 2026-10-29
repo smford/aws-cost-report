@@ -3,6 +3,7 @@ package renderer
 import (
 	"fmt"
 	"io"
+	"math"
 	"strings"
 
 	"github.com/smford/aws-cost-report/internal/awsclient"
@@ -43,20 +44,20 @@ func RenderTable(w io.Writer, r *awsclient.CostReport, noColor bool) error {
 		b.WriteString(fmt.Sprintf(" %-24s | %18s | %17s | %16s | %16s\n", "Metric", "Amount ("+r.Metadata.Currency+")", "Prev ("+r.Metadata.Currency+")", "Diff ($)", "% Δ"))
 		b.WriteString(divSingle + "\n")
 
-		unblendedDiffStr := colorize(r.Totals.MoMDeltaAmount, fmt.Sprintf("%+16.2f", r.Totals.MoMDeltaAmount), noColor)
-		unblendedPctStr := colorize(r.Totals.MoMDeltaPercent, fmt.Sprintf("%+15.2f%%", r.Totals.MoMDeltaPercent), noColor)
+		unblendedDiffStr := colorize(r.Totals.MoMDeltaAmount, formatTableDiff(r.Totals.MoMDeltaAmount, 16), noColor)
+		unblendedPctStr := colorize(r.Totals.MoMDeltaPercent, formatTablePct(r.Totals.MoMDeltaPercent, 16), noColor)
 		b.WriteString(fmt.Sprintf(" %-24s | %18.2f | %17.2f | %s | %s\n", "Unblended Cost", r.Totals.UnblendedCost, r.Totals.PrevUnblendedCost, unblendedDiffStr, unblendedPctStr))
 
 		blendedDiff := r.Totals.BlendedCost - r.Totals.PrevBlendedCost
 		blendedPct := calcPercent(r.Totals.BlendedCost, r.Totals.PrevBlendedCost)
-		blendedDiffStr := colorize(blendedDiff, fmt.Sprintf("%+16.2f", blendedDiff), noColor)
-		blendedPctStr := colorize(blendedPct, fmt.Sprintf("%+15.2f%%", blendedPct), noColor)
+		blendedDiffStr := colorize(blendedDiff, formatTableDiff(blendedDiff, 16), noColor)
+		blendedPctStr := colorize(blendedPct, formatTablePct(blendedPct, 16), noColor)
 		b.WriteString(fmt.Sprintf(" %-24s | %18.2f | %17.2f | %s | %s\n", "Blended Cost", r.Totals.BlendedCost, r.Totals.PrevBlendedCost, blendedDiffStr, blendedPctStr))
 
 		amortDiff := r.Totals.AmortizedCost - r.Totals.PrevAmortizedCost
 		amortPct := calcPercent(r.Totals.AmortizedCost, r.Totals.PrevAmortizedCost)
-		amortDiffStr := colorize(amortDiff, fmt.Sprintf("%+16.2f", amortDiff), noColor)
-		amortPctStr := colorize(amortPct, fmt.Sprintf("%+15.2f%%", amortPct), noColor)
+		amortDiffStr := colorize(amortDiff, formatTableDiff(amortDiff, 16), noColor)
+		amortPctStr := colorize(amortPct, formatTablePct(amortPct, 16), noColor)
 		b.WriteString(fmt.Sprintf(" %-24s | %18.2f | %17.2f | %s | %s\n", "Amortized Cost", r.Totals.AmortizedCost, r.Totals.PrevAmortizedCost, amortDiffStr, amortPctStr))
 	} else {
 		b.WriteString(fmt.Sprintf(" %-18s | %18s\n", "Metric", "Amount ("+r.Metadata.Currency+")"))
@@ -78,8 +79,8 @@ func RenderTable(w io.Writer, r *awsclient.CostReport, noColor bool) error {
 		b.WriteString(fmt.Sprintf(" %-42s | %15s | %14s | %10s | %10s\n", truncate(headerCol, 42), "Unblended ("+r.Metadata.Currency+")", "Prev ("+r.Metadata.Currency+")", "Diff ($)", "% Δ"))
 		b.WriteString(divSingle + "\n")
 		for _, item := range r.Items {
-			diffStr := fmt.Sprintf("%+10.2f", item.MoMDeltaAmount)
-			pctStr := fmt.Sprintf("%+9.2f%%", item.MoMDeltaPercent)
+			diffStr := formatTableDiff(item.MoMDeltaAmount, 10)
+			pctStr := formatTablePct(item.MoMDeltaPercent, 10)
 
 			coloredDiff := colorize(item.MoMDeltaAmount, diffStr, noColor)
 			coloredPct := colorize(item.MoMDeltaPercent, pctStr, noColor)
@@ -135,4 +136,18 @@ func calcPercent(current, prev float64) float64 {
 		return 100
 	}
 	return ((current - prev) / prev) * 100.0
+}
+
+func formatTableDiff(val float64, width int) string {
+	if math.Abs(val) < 0.005 {
+		return fmt.Sprintf("%*.2f", width, 0.0)
+	}
+	return fmt.Sprintf("%+*.2f", width, val)
+}
+
+func formatTablePct(val float64, width int) string {
+	if math.Abs(val) < 0.005 {
+		return fmt.Sprintf("%*.2f%%", width-1, 0.0)
+	}
+	return fmt.Sprintf("%+*.2f%%", width-1, val)
 }
