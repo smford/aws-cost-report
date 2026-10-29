@@ -58,6 +58,8 @@ GENERATE FLAGS:
   --start <YYYY-MM-DD>    Explicit billing start date (inclusive)
   --end <YYYY-MM-DD>      Explicit billing end date (inclusive)
   --group-by <dim>        Grouping dimension: SERVICE (default), LINKED_ACCOUNT, or TAG:<Key>
+  --name <string>         Human-readable name or alias for the AWS account (e.g. 'Production Core')
+  --account-name <name>   Alias for --name
   --filter <names>        Filter services by official name, alias, or substring (e.g. 'Amazon DynamoDB', 'S3', 'Lambda')
   --tag <Key=Value>       Filter costs by AWS Cost Allocation Tag (e.g. 'Environment=Production', 'Project=Billing')
   --tag-filter <Key=Val>  Alias for --tag. Supports multiple tags or comma-separated values (e.g. 'Env=Prod,Stage')
@@ -79,37 +81,40 @@ EXAMPLES:
   # 2. Compare Month-over-Month spend with colorized delta indicators
   aws-cost-report generate --compare
 
-  # 3. Filter specific services using official AWS Cost Explorer names or substrings
+  # 3. Label report with a human-readable AWS account name
+  aws-cost-report generate --compare --name="Production Core"
+
+  # 4. Filter specific services using official AWS Cost Explorer names or substrings
   aws-cost-report generate --filter="Amazon DynamoDB,AWS Lambda"
 
-  # 4. Filter using common service aliases (e.g. S3, EC2, KMS)
+  # 5. Filter using common service aliases (e.g. S3, EC2, KMS)
   aws-cost-report generate --filter="S3,EC2"
 
-  # 5. Filter spend scoped to a specific Cost Allocation Tag (e.g. Environment=Production)
+  # 6. Filter spend scoped to a specific Cost Allocation Tag (e.g. Environment=Production)
   aws-cost-report generate --tag="Environment=Production"
 
-  # 6. Filter by multiple tag values or multiple tags with Month-over-Month comparison
+  # 7. Filter by multiple tag values or multiple tags with Month-over-Month comparison
   aws-cost-report generate --tag="Environment=Production,Staging" --tag="Project=FinOps" --compare
 
-  # 7. Group tag-filtered costs by linked account or sub-tag
+  # 8. Group tag-filtered costs by linked account or sub-tag
   aws-cost-report generate --tag="Environment=Production" --group-by=LINKED_ACCOUNT
 
-  # 8. Identify costs of untagged resources for a specific tag key
+  # 9. Identify costs of untagged resources for a specific tag key
   aws-cost-report generate --group-by="TAG:Environment" --filter="Untagged" --compare
 
-  # 9. List all official AWS service names available in Cost Explorer
+  # 10. List all official AWS service names available in Cost Explorer
   aws-cost-report services
 
-  # 10. Top 5 cost drivers with remainder aggregated into "Other Services"
+  # 11. Top 5 cost drivers with remainder aggregated into "Other Services"
   aws-cost-report generate --compare --top=5
 
-  # 11. CI/CD budget guardrail in GitHub Actions with Step Summary
+  # 12. CI/CD budget guardrail in GitHub Actions with Step Summary
   aws-cost-report generate --compare --format=markdown --threshold=500.00
 
-  # 12. Offline test mode with tag filtering simulation
+  # 13. Offline test mode with tag filtering simulation
   aws-cost-report generate --mock --tag="Environment=Production" --compare
 
-  # 13. Start HTTP microservice daemon
+  # 14. Start HTTP microservice daemon
   aws-cost-report server --port=8080
 
 Use "aws-cost-report <command> --help" for more information about a command.
@@ -434,6 +439,11 @@ func runServer(cfg *config.Config) {
 				reqCfg.Grouping.Type = "DIMENSION"
 				reqCfg.Grouping.Key = strings.ToUpper(gb)
 			}
+		}
+		if n := q.Get("name"); n != "" {
+			reqCfg.AccountName = n
+		} else if an := q.Get("account-name"); an != "" {
+			reqCfg.AccountName = an
 		}
 		if flt := q.Get("filter"); flt != "" {
 			parts := strings.Split(flt, ",")

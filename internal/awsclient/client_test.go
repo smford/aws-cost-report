@@ -562,3 +562,23 @@ func TestAccountMapping(t *testing.T) {
 		t.Errorf("expected account ID %q, got %q", expected, report.Metadata.AccountID)
 	}
 }
+
+func TestAccountNameDirectInMockReport(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.MockMode = true
+	cfg.AccountName = "FinOps Analytics"
+
+	refTime := time.Date(2026, time.October, 28, 12, 0, 0, 0, time.UTC)
+	report, err := GenerateMockReport(cfg, refTime)
+	if err != nil {
+		t.Fatalf("GenerateMockReport failed: %v", err)
+	}
+
+	expected := "715195480427 (FinOps Analytics)"
+	if report.Metadata.AccountID != expected {
+		t.Errorf("expected account ID %q, got %q", expected, report.Metadata.AccountID)
+	}
+	if report.Metadata.AccountName != "FinOps Analytics" {
+		t.Errorf("expected AccountName 'FinOps Analytics', got %q", report.Metadata.AccountName)
+	}
+}

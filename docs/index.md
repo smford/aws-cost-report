@@ -52,6 +52,7 @@ jobs:
 | `format` | Output format (`markdown`, `table`, `json`, `csv`) | `markdown` |
 | `filter` | Filter services by official name, alias, or substring | `""` |
 | `group-by` | Grouping dimension (`SERVICE`, `LINKED_ACCOUNT`, `TAG:<Key>`) | `SERVICE` |
+| `name` | Human-readable name or alias for the AWS account (e.g. `Production Core`) | `""` |
 | `tag` | Filter costs by AWS Cost Allocation Tag (e.g. `Environment=Production`) | `""` |
 | `threshold` | Budget threshold dollar amount | `""` |
 | `fail-on-threshold` | Fail step if budget threshold exceeded | `true` |
@@ -88,6 +89,9 @@ aws-cost-report
 
 # Generate Month-over-Month report
 aws-cost-report generate --compare
+
+# Label report with a human-readable AWS account name
+aws-cost-report generate --compare --name="Production Core"
 
 # List official AWS Cost Explorer service names
 aws-cost-report services

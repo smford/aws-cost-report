@@ -141,7 +141,26 @@ Calculates absolute delta and percentage shift compared to the preceding period:
 aws-cost-report generate --compare
 ```
 
-### 3. List Official AWS Service Names
+### 3. Human-Readable AWS Account Labeling (`--name`)
+Display a friendly human-readable name for the AWS account alongside the 12-digit AWS Account ID in report headers:
+
+```bash
+# Label account from CLI
+aws-cost-report generate --compare --name="Production Core"
+```
+
+In `config.yaml`, the account name can be permanently configured:
+
+```yaml
+name: "Production Core"
+```
+
+Report headers across all renderers (Table, Markdown, Slack, JSON) will clearly display the friendly alias:
+```text
+ Account ID:         123456789012 (Production Core)
+```
+
+### 4. List Official AWS Service Names
 AWS Cost Explorer uses official service identifiers (such as `Amazon DynamoDB`, `AWS Lambda`, and `Amazon Simple Storage Service`). You can list all official names available in your account or environment:
 
 ```bash
@@ -152,7 +171,7 @@ aws-cost-report services
 aws-cost-report services --mock
 ```
 
-### 4. Service Filtering & Aliases
+### 5. Service Filtering & Aliases
 Focus on specific workloads. You can filter using **official full names**, **common abbreviations**, or **case-insensitive substrings**:
 
 ```bash
@@ -166,7 +185,7 @@ aws-cost-report generate --filter="S3,EC2,KMS"
 aws-cost-report generate --filter="DynamoDB,Lambda"
 ```
 
-### 5. Filtering by Cost Allocation Tags (`--tag` / `--tag-filter`)
+### 6. Filtering by Cost Allocation Tags (`--tag` / `--tag-filter`)
 Scope your entire billing report to specific workloads tagged in AWS. AWS Cost Explorer natively filters both totals and breakdown items to resources bearing the specified tags:
 
 ```bash
@@ -196,7 +215,7 @@ tag_filters:
   Project: "FinOps"
 ```
 
-### 6. Group by Tag or Linked Account
+### 7. Group by Tag or Linked Account
 Break down costs by environment, team, or AWS Organization linked account:
 
 ```bash
@@ -207,7 +226,7 @@ aws-cost-report generate --group-by="TAG:Environment"
 aws-cost-report generate --group-by="LINKED_ACCOUNT"
 ```
 
-### 7. How to Identify Untagged Costs
+### 8. How to Identify Untagged Costs
 When you group costs by an AWS Cost Allocation Tag dimension, AWS Cost Explorer aggregates all resources missing that tag into an empty tag key value. `aws-cost-report` automatically detects this and maps it to **`Untagged / Other`**.
 
 #### 1. View Breakdown of All Tag Values (Including Untagged Spend)
@@ -235,21 +254,21 @@ aws-cost-report generate --group-by="TAG:Environment" --filter="Untagged" --comp
 > 2. **Evaluated Per Tag Key**: AWS Cost Explorer does not have a global "completely untagged" dimension across all potential tags simultaneously; grouping evaluates untagged resources for the specific tag key requested (e.g., `TAG:Environment`, `TAG:CostCenter`).
 > 3. **Cost Aggregation vs. Resource IDs**: The tool reports aggregate monetary figures (e.g., `$450.00` on `Untagged / Other`), but does not enumerate individual resource ARNs or IDs (which would require AWS Config or the AWS Resource Groups Tagging API).
 
-### 8. Top N Cost Drivers
+### 9. Top N Cost Drivers
 Highlight the largest cost drivers and consolidate all smaller workloads into `"Other Services"`:
 
 ```bash
 aws-cost-report generate --compare --top=5
 ```
 
-### 9. Explicit Date Range
+### 10. Explicit Date Range
 Query custom date intervals (for custom ranges, comparison periods match the exact duration in days):
 
 ```bash
 aws-cost-report generate --start=2026-08-01 --end=2026-09-30
 ```
 
-### 10. SRE Budget Guardrail (CI/CD Quality Gate)
+### 11. SRE Budget Guardrail (CI/CD Quality Gate)
 Exit with status code `1` if total unblended cost exceeds threshold:
 
 ```bash
@@ -257,7 +276,7 @@ aws-cost-report generate --threshold=50.00
 echo $? # Returns 1 if total cost > $50.00, or 0 if within budget
 ```
 
-### 11. Export to JSON or CSV
+### 12. Export to JSON or CSV
 
 ```bash
 # JSON output for jq or downstream processing
@@ -267,7 +286,7 @@ aws-cost-report generate --format=json > monthly-costs.json
 aws-cost-report generate --format=csv > monthly-costs.csv
 ```
 
-### 12. Multi-Currency Support (Auto-Detected & Configurable)
+### 13. Multi-Currency Support (Auto-Detected & Configurable)
 `aws-cost-report` automatically detects your AWS account's billing currency (`EUR`, `GBP`, `JPY`, `AUD`, `CAD`, `USD`, etc.) from the AWS Cost Explorer API response and dynamically renders the corresponding symbols (`€`, `£`, `¥`, `A$`, `CA$`, `$`) and headers (`Diff (€)`, `Delta (£)`).
 
 You can also explicitly set or override the currency:
@@ -329,6 +348,8 @@ jobs:
 | `start` | Explicit billing start date (`YYYY-MM-01` or `YYYY-MM-DD`) | `""` | No |
 | `end` | Explicit billing end date (`YYYY-MM-01` or `YYYY-MM-DD`) | `""` | No |
 | `group-by` | Grouping dimension (`SERVICE`, `LINKED_ACCOUNT`, or `TAG:<Key>`) | `SERVICE` | No |
+| `name` | Human-readable name or alias for the AWS account (e.g. `Production Core`) | `""` | No |
+| `account-name` | Alias for `name` | `""` | No |
 | `filter` | Comma-separated substring filter for services (e.g. `DynamoDB,Lambda`) | `""` | No |
 | `tag` | Filter costs by AWS Cost Allocation Tag (e.g. `Environment=Production` or `Environment=Prod,Stage`) | `""` | No |
 | `tag-filter` | Alias for `tag` | `""` | No |
@@ -426,6 +447,7 @@ All CLI options can be configured via a `config.yaml` file placed in the working
 
 ```yaml
 version: "1"
+name: "Production Core" # Friendly alias displayed alongside AWS Account ID in report headers
 defaults:
   currency: "USD"
   months_back: 1
@@ -532,6 +554,7 @@ To run `aws-cost-report`, the executing IAM principal requires read permissions 
 | `--start` | | | Explicit billing start date (`YYYY-MM-01` or `YYYY-MM-DD`, inclusive) |
 | `--end` | | | Explicit billing end date (`YYYY-MM-01` or `YYYY-MM-DD`, inclusive) |
 | `--group-by` | | `SERVICE` | Grouping dimension (`SERVICE`, `LINKED_ACCOUNT`) or `TAG:<Key>` |
+| `--name` | `--account-name` | | Human-readable name or alias for the AWS account (e.g. `Production Core`) |
 | `--threshold` | | `0.00` | SRE budget alert dollar threshold. Exits with code 1 if exceeded |
 | `--min-cost` | | `0.01` | Minimum cost threshold to display line items |
 | `--output` | `-o` | | Write formatted cost report to specified file path |

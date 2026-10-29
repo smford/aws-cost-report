@@ -128,14 +128,16 @@ func (t *tagFlagSlice) Set(val string) error {
 
 // Config represents the complete application configuration.
 type Config struct {
-	Version      string            `yaml:"version"`
-	Defaults     DefaultsConfig    `yaml:"defaults"`
-	Grouping     GroupingConfig    `yaml:"grouping"`
-	Budget       BudgetConfig      `yaml:"budget"`
-	Reporting    ReportingConfig   `yaml:"reporting"`
-	Server       ServerConfig      `yaml:"server"`
-	Accounts     map[string]string `yaml:"accounts"`
-	SlackWebhook string            `yaml:"slack_webhook"`
+	Version          string            `yaml:"version"`
+	Defaults         DefaultsConfig    `yaml:"defaults"`
+	Grouping         GroupingConfig    `yaml:"grouping"`
+	Budget           BudgetConfig      `yaml:"budget"`
+	Reporting        ReportingConfig   `yaml:"reporting"`
+	Server           ServerConfig      `yaml:"server"`
+	Accounts         map[string]string `yaml:"accounts"`
+	AccountName      string            `yaml:"name"`
+	AccountNameAlias string            `yaml:"account_name"`
+	SlackWebhook     string            `yaml:"slack_webhook"`
 
 	// Runtime options resolved from CLI flags or env
 	ConfigFile            string       `yaml:"-"`
@@ -252,6 +254,8 @@ func LoadConfig(args []string) (*Config, error) {
 		topFlag      = fs.Int("top", 0, "Show top N highest cost items and aggregate remainder into Other")
 		slackFlag    = fs.String("slack-webhook", "", "Incoming Slack webhook URL to post formatted cost report")
 		currencyFlag = fs.String("currency", "", "Currency code (e.g. USD, EUR, GBP) to override auto-detected AWS billing currency")
+		nameFlag     = fs.String("name", "", "Human-readable name or alias for the AWS account (e.g. 'Production Core')")
+		nameAlias    = fs.String("account-name", "", "Alias for --name")
 		servicesFlag = fs.Bool("services", false, "List official AWS Cost Explorer service names")
 		listServFlag = fs.Bool("list-services", false, "Alias for --services")
 	)
@@ -301,6 +305,18 @@ func LoadConfig(args []string) (*Config, error) {
 	}
 
 	// Apply CLI flag overrides (highest precedence)
+	if *nameFlag != "" {
+		cfg.AccountName = strings.TrimSpace(*nameFlag)
+	} else if *nameAlias != "" {
+		cfg.AccountName = strings.TrimSpace(*nameAlias)
+	} else if cfg.AccountName == "" && cfg.AccountNameAlias != "" {
+		cfg.AccountName = strings.TrimSpace(cfg.AccountNameAlias)
+	} else if cfg.AccountName == "" {
+		if envName := strings.TrimSpace(os.Getenv("AWS_ACCOUNT_NAME")); envName != "" {
+			cfg.AccountName = envName
+		}
+	}
+
 	if *currencyFlag != "" {
 		cfg.Defaults.Currency = strings.ToUpper(strings.TrimSpace(*currencyFlag))
 		cfg.CurrencyExplicitlySet = true

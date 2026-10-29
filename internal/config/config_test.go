@@ -187,3 +187,61 @@ tag_filters:
 		t.Errorf("expected Owner=FinOps, got %v", cfg.TagFilters["Owner"])
 	}
 }
+
+func TestAccountNameConfigAndFlags(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// 1. YAML with name
+	yamlContent1 := `
+version: "1"
+name: "Production Core"
+`
+	configPath1 := filepath.Join(tmpDir, "config1.yaml")
+	if err := os.WriteFile(configPath1, []byte(yamlContent1), 0644); err != nil {
+		t.Fatalf("failed to write test config file: %v", err)
+	}
+
+	cfg1, err := LoadConfig([]string{"--config", configPath1})
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+	if cfg1.AccountName != "Production Core" {
+		t.Errorf("expected AccountName 'Production Core', got %q", cfg1.AccountName)
+	}
+
+	// 2. YAML with account_name alias
+	yamlContent2 := `
+version: "1"
+account_name: "Staging Workloads"
+`
+	configPath2 := filepath.Join(tmpDir, "config2.yaml")
+	if err := os.WriteFile(configPath2, []byte(yamlContent2), 0644); err != nil {
+		t.Fatalf("failed to write test config file: %v", err)
+	}
+
+	cfg2, err := LoadConfig([]string{"--config", configPath2})
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+	if cfg2.AccountName != "Staging Workloads" {
+		t.Errorf("expected AccountName 'Staging Workloads', got %q", cfg2.AccountName)
+	}
+
+	// 3. CLI flag --name overrides YAML
+	cfg3, err := LoadConfig([]string{"--config", configPath1, "--name", "CLI Override Name"})
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+	if cfg3.AccountName != "CLI Override Name" {
+		t.Errorf("expected CLI override 'CLI Override Name', got %q", cfg3.AccountName)
+	}
+
+	// 4. CLI flag --account-name alias
+	cfg4, err := LoadConfig([]string{"--account-name", "Alias Name"})
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+	if cfg4.AccountName != "Alias Name" {
+		t.Errorf("expected AccountName 'Alias Name', got %q", cfg4.AccountName)
+	}
+}

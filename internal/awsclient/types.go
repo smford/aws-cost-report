@@ -19,6 +19,7 @@ type LineItem struct {
 // ReportMetadata contains contextual details about the generated cost report.
 type ReportMetadata struct {
 	AccountID        string `json:"account_id"`
+	AccountName      string `json:"account_name,omitempty"`
 	BillingMonth     string `json:"billing_month"`
 	PeriodStart      string `json:"period_start"`
 	PeriodEnd        string `json:"period_end"`

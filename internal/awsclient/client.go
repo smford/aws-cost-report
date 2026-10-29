@@ -311,10 +311,18 @@ func (c *Client) GenerateReport(ctx context.Context, cfg *config.Config, now tim
 	// Apply account alias mapping if configured
 	if strings.EqualFold(cfg.Grouping.Key, "LINKED_ACCOUNT") {
 		for i := range filtered {
-			filtered[i].Name = resolveAccountName(filtered[i].Name, cfg.Accounts)
+			itemAccountName := ""
+			if filtered[i].Name == accountID {
+				itemAccountName = cfg.AccountName
+			}
+			filtered[i].Name = resolveAccountName(filtered[i].Name, cfg.Accounts, itemAccountName)
 		}
 	}
-	report.Metadata.AccountID = resolveAccountName(accountID, cfg.Accounts)
+	report.Metadata.AccountID = resolveAccountName(accountID, cfg.Accounts, cfg.AccountName)
+	report.Metadata.AccountName = cfg.AccountName
+	if report.Metadata.AccountName == "" && cfg.Accounts != nil {
+		report.Metadata.AccountName = cfg.Accounts[accountID]
+	}
 
 	// Apply Top N aggregation if configured
 	filtered = applyTopNAggregation(filtered, cfg.Defaults.Top, cfg.Grouping.Key)
@@ -611,10 +619,18 @@ func GenerateMockReport(cfg *config.Config, now time.Time) (*CostReport, error) 
 		}
 	}
 
-	mockAccountID := resolveAccountName("715195480427", cfg.Accounts)
+	mockAccountID := resolveAccountName("715195480427", cfg.Accounts, cfg.AccountName)
+	mockAccountName := cfg.AccountName
+	if mockAccountName == "" && cfg.Accounts != nil {
+		mockAccountName = cfg.Accounts["715195480427"]
+	}
 	if strings.EqualFold(cfg.Grouping.Key, "LINKED_ACCOUNT") {
 		for i := range filtered {
-			filtered[i].Name = resolveAccountName(filtered[i].Name, cfg.Accounts)
+			itemAccountName := ""
+			if filtered[i].Name == "715195480427" {
+				itemAccountName = cfg.AccountName
+			}
+			filtered[i].Name = resolveAccountName(filtered[i].Name, cfg.Accounts, itemAccountName)
 		}
 	}
 	filtered = applyTopNAggregation(filtered, cfg.Defaults.Top, cfg.Grouping.Key)
@@ -627,6 +643,7 @@ func GenerateMockReport(cfg *config.Config, now time.Time) (*CostReport, error) 
 	report := &CostReport{
 		Metadata: ReportMetadata{
 			AccountID:        mockAccountID,
+			AccountName:      mockAccountName,
 			BillingMonth:     dateRange.BillingMonthDesc,
 			PeriodStart:      dateRange.Start.Format(DateFormat),
 			PeriodEnd:        dateRange.EndInclusive.Format(DateFormat),
@@ -846,7 +863,16 @@ func applyTopNAggregation(items []LineItem, top int, groupKey string) []LineItem
 	return append(topItems, other)
 }
 
-func resolveAccountName(account string, accounts map[string]string) string {
+func resolveAccountName(account string, accounts map[string]string, explicitName string) string {
+	if explicitName != "" {
+		if strings.Contains(explicitName, account) {
+			return explicitName
+		}
+		if account != "" {
+			return fmt.Sprintf("%s (%s)", account, explicitName)
+		}
+		return explicitName
+	}
 	if len(accounts) == 0 {
 		return account
 	}

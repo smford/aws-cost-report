@@ -1,4 +1,7 @@
 version: "1"
+# Optional human-readable name for the AWS account (displayed alongside Account ID in report headers)
+name: "Production Core"
+
 defaults:
   currency: "USD"
   months_back: 1
