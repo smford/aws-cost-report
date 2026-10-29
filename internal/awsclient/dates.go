@@ -14,13 +14,28 @@ type DateRange struct {
 	EndExclusiveAWS  time.Time
 	BillingMonthDesc string
 	IsEstimated      bool
+	IsMTD            bool
 }
 
 // ResolveTimePeriod calculates the query date boundaries adhering to AWS Cost Explorer rules:
 // Cost Explorer TimePeriod is inclusive of Start and exclusive of End.
-func ResolveTimePeriod(now time.Time, monthsBack int, startStr, endStr string) (*DateRange, error) {
+func ResolveTimePeriod(now time.Time, monthsBack int, startStr, endStr string, mtd ...bool) (*DateRange, error) {
 	now = now.UTC()
 	currentMonthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+
+	if len(mtd) > 0 && mtd[0] {
+		endInclusive := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+		endExclusiveAWS := endInclusive.AddDate(0, 0, 1)
+
+		return &DateRange{
+			Start:            currentMonthStart,
+			EndInclusive:     endInclusive,
+			EndExclusiveAWS:  endExclusiveAWS,
+			BillingMonthDesc: fmt.Sprintf("%s (Month-to-Date)", currentMonthStart.Format("January 2006")),
+			IsEstimated:      true,
+			IsMTD:            true,
+		}, nil
+	}
 
 	if startStr != "" || endStr != "" {
 		if startStr == "" || endStr == "" {
@@ -98,6 +113,27 @@ func ResolveTimePeriod(now time.Time, monthsBack int, startStr, endStr string) (
 // For full-month intervals, it preserves exact calendar month boundaries.
 // For arbitrary custom day ranges, it preserves identical day duration.
 func ResolvePreviousPeriod(current *DateRange) *DateRange {
+	if current.IsMTD {
+		prevStart := current.Start.AddDate(0, -1, 0)
+		targetDay := current.EndInclusive.Day()
+		// Clamp targetDay to last day of previous month if previous month has fewer days
+		lastDayOfPrevMonth := time.Date(prevStart.Year(), prevStart.Month()+1, 0, 0, 0, 0, 0, time.UTC).Day()
+		if targetDay > lastDayOfPrevMonth {
+			targetDay = lastDayOfPrevMonth
+		}
+		prevInclusive := time.Date(prevStart.Year(), prevStart.Month(), targetDay, 0, 0, 0, 0, time.UTC)
+		prevExclusiveAWS := prevInclusive.AddDate(0, 0, 1)
+
+		return &DateRange{
+			Start:            prevStart,
+			EndInclusive:     prevInclusive,
+			EndExclusiveAWS:  prevExclusiveAWS,
+			BillingMonthDesc: fmt.Sprintf("%s (Month-to-Date)", prevStart.Format("January 2006")),
+			IsEstimated:      false,
+			IsMTD:            true,
+		}
+	}
+
 	// Check if current period represents whole calendar months
 	isFullMonth := current.Start.Day() == 1 && current.EndExclusiveAWS.Day() == 1
 

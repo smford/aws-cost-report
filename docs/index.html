@@ -372,6 +372,14 @@ aws-cost-report generate --months=6 --monthly
 # Export 12-month pivot table to CSV for spreadsheet analysis:
 aws-cost-report generate --months=12 --monthly --format=csv -o 12-months.csv</code></pre>
 
+      <h3>Month-to-Date (MTD) Spend Tracking</h3>
+      <p>Query real-time in-progress spend for the active month up to today, with automatic comparison against the same day window last month:</p>
+      <pre><code># Query Month-to-Date spend for current billing cycle:
+aws-cost-report generate --mtd
+
+# Compare current MTD spend against the same day window last month:
+aws-cost-report generate --mtd --compare</code></pre>
+
       <h3>Budget Guardrail</h3>
       <pre><code>aws-cost-report generate --threshold=50.00
 # Returns exit code 1 if total cost exceeds $50.00</code></pre>

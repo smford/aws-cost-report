@@ -123,3 +123,45 @@ func TestResolvePreviousPeriodCustomRange(t *testing.T) {
 		t.Errorf("expected prev start 2026-10-01, got %s", prev.Start.Format(DateFormat))
 	}
 }
+
+func TestResolveTimePeriodMTD(t *testing.T) {
+	refTime := time.Date(2026, time.October, 29, 14, 0, 0, 0, time.UTC)
+	dr, err := ResolveTimePeriod(refTime, 1, "", "", true)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if dr.Start.Format(DateFormat) != "2026-10-01" {
+		t.Errorf("expected start 2026-10-01, got %s", dr.Start.Format(DateFormat))
+	}
+	if dr.EndInclusive.Format(DateFormat) != "2026-10-29" {
+		t.Errorf("expected end inclusive 2026-10-29, got %s", dr.EndInclusive.Format(DateFormat))
+	}
+	if dr.EndExclusiveAWS.Format(DateFormat) != "2026-10-30" {
+		t.Errorf("expected AWS exclusive end 2026-10-30, got %s", dr.EndExclusiveAWS.Format(DateFormat))
+	}
+	if dr.BillingMonthDesc != "October 2026 (Month-to-Date)" {
+		t.Errorf("expected billing month desc 'October 2026 (Month-to-Date)', got %q", dr.BillingMonthDesc)
+	}
+	if !dr.IsEstimated {
+		t.Errorf("expected IsEstimated true for MTD")
+	}
+	if !dr.IsMTD {
+		t.Errorf("expected IsMTD true")
+	}
+
+	// Test ResolvePreviousPeriod for MTD
+	prev := ResolvePreviousPeriod(dr)
+	if prev.Start.Format(DateFormat) != "2026-09-01" {
+		t.Errorf("expected prev start 2026-09-01, got %s", prev.Start.Format(DateFormat))
+	}
+	if prev.EndInclusive.Format(DateFormat) != "2026-09-29" {
+		t.Errorf("expected prev end inclusive 2026-09-29, got %s", prev.EndInclusive.Format(DateFormat))
+	}
+	if prev.EndExclusiveAWS.Format(DateFormat) != "2026-09-30" {
+		t.Errorf("expected prev AWS exclusive end 2026-09-30, got %s", prev.EndExclusiveAWS.Format(DateFormat))
+	}
+	if prev.BillingMonthDesc != "September 2026 (Month-to-Date)" {
+		t.Errorf("expected prev billing month desc 'September 2026 (Month-to-Date)', got %q", prev.BillingMonthDesc)
+	}
+}

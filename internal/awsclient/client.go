@@ -120,7 +120,7 @@ func (c *Client) GenerateReport(ctx context.Context, cfg *config.Config, now tim
 	}
 
 	// 2. Resolve query time periods
-	dateRange, err := ResolveTimePeriod(now, cfg.MonthsBack, cfg.StartDate, cfg.EndDate)
+	dateRange, err := ResolveTimePeriod(now, cfg.MonthsBack, cfg.StartDate, cfg.EndDate, cfg.MTD)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve time period: %w", err)
 	}
@@ -691,7 +691,7 @@ func (c *Client) fetchCostData(ctx context.Context, cfg *config.Config, dateRang
 
 // GenerateMockReport generates realistic mock billing data matching specification benchmarks.
 func GenerateMockReport(cfg *config.Config, now time.Time) (*CostReport, error) {
-	dateRange, err := ResolveTimePeriod(now, cfg.MonthsBack, cfg.StartDate, cfg.EndDate)
+	dateRange, err := ResolveTimePeriod(now, cfg.MonthsBack, cfg.StartDate, cfg.EndDate, cfg.MTD)
 	if err != nil {
 		return nil, err
 	}
@@ -981,7 +981,7 @@ func (c *Client) ListServices(ctx context.Context, cfg *config.Config, now time.
 		return GetMockServices(), nil
 	}
 
-	dateRange, err := ResolveTimePeriod(now, cfg.MonthsBack, cfg.StartDate, cfg.EndDate)
+	dateRange, err := ResolveTimePeriod(now, cfg.MonthsBack, cfg.StartDate, cfg.EndDate, cfg.MTD)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve time period: %w", err)
 	}

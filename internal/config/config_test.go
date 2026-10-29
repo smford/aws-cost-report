@@ -294,3 +294,42 @@ defaults:
 		t.Errorf("expected MonthsBack 12, got %d", cfg3.MonthsBack)
 	}
 }
+
+func TestLoadConfigMTD(t *testing.T) {
+	// 1. --mtd flag
+	cfg1, err := LoadConfig([]string{"--mtd"})
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+	if !cfg1.MTD {
+		t.Errorf("expected MTD true, got false")
+	}
+
+	// 2. --current-month alias
+	cfg2, err := LoadConfig([]string{"--current-month"})
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+	if !cfg2.MTD {
+		t.Errorf("expected MTD true from alias, got false")
+	}
+
+	// 3. YAML config with mtd: true
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "mtd-config.yaml")
+	yamlContent := `
+version: "1"
+defaults:
+  mtd: true
+`
+	if err := os.WriteFile(configPath, []byte(yamlContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+	cfg3, err := LoadConfig([]string{"--config", configPath})
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+	if !cfg3.MTD {
+		t.Errorf("expected MTD true from YAML, got false")
+	}
+}

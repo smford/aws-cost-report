@@ -98,6 +98,10 @@ inputs:
     description: 'Display multi-month historical breakdown with each month as a separate column (true/false)'
     required: false
     default: 'false'
+  mtd:
+    description: 'Query Month-to-Date spend from the 1st of the current month up to today (true/false)'
+    required: false
+    default: 'false'
 
 outputs:
   report:
@@ -276,6 +280,10 @@ runs:
 
         if [ "${{ inputs.monthly }}" = "true" ]; then
           ARGS+=("--monthly")
+        fi
+
+        if [ "${{ inputs.mtd }}" = "true" ]; then
+          ARGS+=("--mtd")
         fi
 
         if [ -n "${{ inputs.name }}" ]; then

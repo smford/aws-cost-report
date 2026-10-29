@@ -139,6 +139,7 @@ type Config struct {
 	AccountNameAlias string            `yaml:"account_name"`
 	SlackWebhook     string            `yaml:"slack_webhook"`
 	Monthly          bool              `yaml:"monthly"`
+	MTD              bool              `yaml:"mtd"`
 
 	// Runtime options resolved from CLI flags or env
 	ConfigFile            string       `yaml:"-"`
@@ -164,6 +165,7 @@ type DefaultsConfig struct {
 	Currency       string   `yaml:"currency"`
 	MonthsBack     int      `yaml:"months_back"`
 	Monthly        bool     `yaml:"monthly"`
+	MTD            bool     `yaml:"mtd"`
 	MinDisplayCost float64  `yaml:"min_display_cost"`
 	Top            int      `yaml:"top"`
 	Metrics        []string `yaml:"metrics"`
@@ -261,6 +263,8 @@ func LoadConfig(args []string) (*Config, error) {
 		monthlyFlag  = fs.Bool("monthly", false, "Display multi-month historical breakdown with each month as a separate column")
 		trendFlag    = fs.Bool("trend", false, "Alias for --monthly")
 		monthlyBrk   = fs.Bool("monthly-breakdown", false, "Alias for --monthly")
+		mtdFlag      = fs.Bool("mtd", false, "Query Month-to-Date spend from the 1st of the current month up to today")
+		currMonthFlg = fs.Bool("current-month", false, "Alias for --mtd")
 		servicesFlag = fs.Bool("services", false, "List official AWS Cost Explorer service names")
 		listServFlag = fs.Bool("list-services", false, "Alias for --services")
 	)
@@ -387,6 +391,12 @@ func LoadConfig(args []string) (*Config, error) {
 		cfg.Monthly = true
 	} else if cfg.Defaults.Monthly {
 		cfg.Monthly = true
+	}
+
+	if *mtdFlag || *currMonthFlg {
+		cfg.MTD = true
+	} else if cfg.Defaults.MTD {
+		cfg.MTD = true
 	}
 
 	if cfg.Monthly && cfg.MonthsBack <= 1 && *months == 0 {

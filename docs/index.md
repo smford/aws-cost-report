@@ -168,3 +168,17 @@ aws-cost-report generate --months=6 --monthly
 # Export 12-month pivot table to CSV for spreadsheets
 aws-cost-report generate --months=12 --monthly --format=csv -o 12-months.csv
 ```
+
+---
+
+## Month-to-Date (MTD) Spend Tracking
+
+Query real-time in-progress spend for the active month up to today:
+
+```bash
+# Query Month-to-Date spend for current billing cycle
+aws-cost-report generate --mtd
+
+# Compare current MTD spend against the same day window last month
+aws-cost-report generate --mtd --compare
+```

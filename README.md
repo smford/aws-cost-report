@@ -30,6 +30,7 @@ A production-grade, zero-dependency (outside official AWS SDK v2 and YAML parser
 - **Three Core Cost Dimensions**: Simultaneously extracts and reports `UnblendedCost`, `BlendedCost`, and `AmortizedCost`.
 - **Month-over-Month (MoM) Delta**: Computes absolute dollar difference ($) and percentage changes (% Δ) against preceding billing periods with ANSI colorized delta indicators (green for reductions, red for increases).
 - **Multi-Month Column Breakdown (`--monthly` / `--trend`)**: View up to 12+ historical months side-by-side in multi-column format (each month has its own column, plus total), in terminal tables, Markdown, CSV, and JSON.
+- **Month-to-Date Tracking (`--mtd` / `--current-month`)**: Query real-time in-progress spend from the 1st of the current month up to today with automatic MoM comparison against the same date window last month.
 - **Multi-Dimension Grouping**: Group by AWS `SERVICE`, `LINKED_ACCOUNT`, or custom Cost Allocation Tags (`TAG:Environment`, `TAG:Project`, etc.).
 - **SRE Budget Guardrails (`--fail-on-threshold`)**: Blocks CI/CD pipelines by terminating with exit code `1` if total billing exceeds a configured dollar threshold.
 - **Multi-Format Output Engines**:
@@ -306,21 +307,34 @@ aws-cost-report generate --months=12 --monthly --format=markdown
 ===================================================================================================================================================================================
 ```
 
-### 10. Top N Cost Drivers
+### 10. Month-to-Date (MTD) Spend Tracking (`--mtd` / `--current-month`)
+Query real-time in-progress spend from the 1st of the current month up to today without needing to calculate or pass explicit dates:
+
+```bash
+# Query Month-to-Date spend for the current cycle
+aws-cost-report generate --mtd
+
+# Compare current MTD spend against the exact same day range last month
+aws-cost-report generate --mtd --compare
+```
+
+When `--compare` is combined with `--mtd`, the previous period automatically matches the identical day-of-month window from the preceding month (e.g. October 1–29 vs. September 1–29).
+
+### 11. Top N Cost Drivers
 Highlight the largest cost drivers and consolidate all smaller workloads into `"Other Services"`:
 
 ```bash
 aws-cost-report generate --compare --top=5
 ```
 
-### 11. Explicit Date Range
+### 12. Explicit Date Range
 Query custom date intervals (for custom ranges, comparison periods match the exact duration in days):
 
 ```bash
 aws-cost-report generate --start=2026-08-01 --end=2026-09-30
 ```
 
-### 12. SRE Budget Guardrail (CI/CD Quality Gate)
+### 13. SRE Budget Guardrail (CI/CD Quality Gate)
 Exit with status code `1` if total unblended cost exceeds threshold:
 
 ```bash
@@ -328,7 +342,7 @@ aws-cost-report generate --threshold=50.00
 echo $? # Returns 1 if total cost > $50.00, or 0 if within budget
 ```
 
-### 13. Export to JSON or CSV
+### 14. Export to JSON or CSV
 
 ```bash
 # JSON output for jq or downstream processing
@@ -338,7 +352,7 @@ aws-cost-report generate --format=json > monthly-costs.json
 aws-cost-report generate --format=csv > monthly-costs.csv
 ```
 
-### 14. Multi-Currency Support (Auto-Detected & Configurable)
+### 15. Multi-Currency Support (Auto-Detected & Configurable)
 `aws-cost-report` automatically detects your AWS account's billing currency (`EUR`, `GBP`, `JPY`, `AUD`, `CAD`, `USD`, etc.) from the AWS Cost Explorer API response and dynamically renders the corresponding symbols (`€`, `£`, `¥`, `A$`, `CA$`, `$`) and headers (`Diff (€)`, `Delta (£)`).
 
 You can also explicitly set or override the currency:
@@ -415,6 +429,7 @@ jobs:
 | `config` | Path to custom YAML configuration file | `""` | No |
 | `currency` | Override currency code and symbol (e.g. `USD`, `EUR`, `GBP`). Auto-detected from AWS by default. | `""` | No |
 | `monthly` | Render multi-month historical breakdown in column format (`true`/`false`) | `false` | No |
+| `mtd` | Query Month-to-Date spend from 1st of month up to today (`true`/`false`) | `false` | No |
 | `output-file` | Optional path to save the formatted report to disk | `""` | No |
 
 ### Action Outputs
@@ -607,6 +622,8 @@ To run `aws-cost-report`, the executing IAM principal requires read permissions 
 | Flag | Short | Default | Description |
 |:---|:---|:---|:---|
 | `--compare` | | `false` | Enable Month-over-Month (MoM) comparison against preceding billing period |
+| `--mtd` | `--current-month` | `false` | Query Month-to-Date spend from the 1st of the current month up to today |
+| `--monthly` | `--trend` | `false` | Display multi-month historical breakdown with each month as a separate column (default: 12 months) |
 | `--format` | | `table` | Output format: `table`, `markdown`, `json`, `csv` |
 | `--filter` | `--service` | | Filter services by official name (`Amazon DynamoDB`), alias (`S3`, `EC2`), or substring |
 | `--tag` | `--tag-filter` | | Filter costs by AWS Cost Allocation Tag (e.g. `Environment=Production` or `Team=Core,API`) |

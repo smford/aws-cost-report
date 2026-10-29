@@ -53,6 +53,8 @@ COMMANDS:
 
 GENERATE FLAGS:
   --compare               Compare Month-over-Month with preceding billing period
+  --mtd                   Query Month-to-Date spend from the 1st of the current month up to today
+  --current-month         Alias for --mtd
   --monthly               Display multi-month historical breakdown with each month as a separate column (default: 12 months)
   --trend                 Alias for --monthly
   --format <string>       Output format: table (default), markdown, json, csv
@@ -121,6 +123,9 @@ EXAMPLES:
 
   # 15. View previous 12 months of bills in multi-column table format
   aws-cost-report generate --months=12 --monthly
+
+  # 16. Query Month-to-Date spend up to today with Month-over-Month comparison
+  aws-cost-report generate --mtd --compare
 
 Use "aws-cost-report <command> --help" for more information about a command.
 `
@@ -459,6 +464,11 @@ func runServer(cfg *config.Config) {
 				reqCfg.Defaults.MonthsBack = 12
 			}
 		}
+		if mtd := q.Get("mtd"); mtd == "true" || mtd == "1" {
+			reqCfg.MTD = true
+		} else if cm := q.Get("current-month"); cm == "true" || cm == "1" {
+			reqCfg.MTD = true
+		}
 		if s := q.Get("start"); s != "" {
 			reqCfg.StartDate = s
 		}
@@ -526,12 +536,12 @@ func runServer(cfg *config.Config) {
 			config.ParseTagFilterString(tagVal, reqCfg.TagFilters)
 		}
 
-		cacheKey := fmt.Sprintf("%v:%s:%s:%d:%s:%v:%s:%d:%.2f:%v:%s:%s",
+		cacheKey := fmt.Sprintf("%v:%s:%s:%d:%s:%v:%s:%d:%.2f:%v:%s:%s:%v",
 			reqCfg.CompareMoM, reqCfg.StartDate, reqCfg.EndDate,
 			reqCfg.MonthsBack, reqCfg.Grouping.Key, reqCfg.Filters,
 			reqCfg.TagFilters.Format(),
 			reqCfg.Defaults.Top, reqCfg.Defaults.MinDisplayCost,
-			reqCfg.Monthly, reqCfg.AccountName, reqCfg.Defaults.Currency)
+			reqCfg.Monthly, reqCfg.AccountName, reqCfg.Defaults.Currency, reqCfg.MTD)
 
 		report, ok := cache.Get(cacheKey)
 		if !ok {
