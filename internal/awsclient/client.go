@@ -2,6 +2,7 @@ package awsclient
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"math/rand"
@@ -17,6 +18,7 @@ import (
 	cetypes "github.com/aws/aws-sdk-go-v2/service/costexplorer/types"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
+	"github.com/aws/smithy-go"
 
 	"github.com/smford/aws-cost-report/internal/config"
 )
@@ -1022,6 +1024,35 @@ func (c *Client) ListServices(ctx context.Context, cfg *config.Config, now time.
 	return services, nil
 }
 
+// isRetryableCostExplorerError checks whether an AWS Cost Explorer error is caused by rate limiting,
+// throttling, or transient conditions that should be retried with exponential backoff.
+// It prioritizes typed smithy.APIError matching before falling back to string inspection.
+func isRetryableCostExplorerError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	var apiErr smithy.APIError
+	if errors.As(err, &apiErr) {
+		switch apiErr.ErrorCode() {
+		case "LimitExceededException",
+			"ThrottlingException",
+			"Throttling",
+			"RequestThrottledException",
+			"RequestLimitExceeded",
+			"TooManyRequestsException",
+			"ProvisionedThroughputExceededException":
+			return true
+		}
+	}
+
+	errStr := err.Error()
+	return strings.Contains(errStr, "LimitExceededException") ||
+		strings.Contains(errStr, "Throttling") ||
+		strings.Contains(errStr, "TooManyRequests") ||
+		strings.Contains(errStr, "429")
+}
+
 func (c *Client) getCostAndUsageWithRetry(ctx context.Context, input *costexplorer.GetCostAndUsageInput) (*costexplorer.GetCostAndUsageOutput, error) {
 	maxRetries := 5
 	backoff := 300 * time.Millisecond
@@ -1036,11 +1067,7 @@ func (c *Client) getCostAndUsageWithRetry(ctx context.Context, input *costexplor
 			return nil, err
 		}
 
-		errStr := err.Error()
-		if strings.Contains(errStr, "LimitExceededException") ||
-			strings.Contains(errStr, "Throttling") ||
-			strings.Contains(errStr, "TooManyRequests") ||
-			strings.Contains(errStr, "429") {
+		if isRetryableCostExplorerError(err) {
 			sleepDur := backoff + time.Duration(rand.Intn(200))*time.Millisecond
 			select {
 			case <-ctx.Done():

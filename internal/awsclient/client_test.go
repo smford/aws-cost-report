@@ -11,6 +11,7 @@ import (
 	cetypes "github.com/aws/aws-sdk-go-v2/service/costexplorer/types"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
+	"github.com/aws/smithy-go"
 
 	"github.com/smford/aws-cost-report/internal/config"
 )
@@ -525,6 +526,87 @@ func TestThrottlingRetry(t *testing.T) {
 	}
 	if ceMock.attempts != 2 {
 		t.Errorf("expected exactly 2 attempts, got %d", ceMock.attempts)
+	}
+}
+
+type smithyThrottlingCEClient struct {
+	attempts int
+}
+
+func (s *smithyThrottlingCEClient) GetCostAndUsage(ctx context.Context, params *costexplorer.GetCostAndUsageInput, optFns ...func(*costexplorer.Options)) (*costexplorer.GetCostAndUsageOutput, error) {
+	s.attempts++
+	if s.attempts < 2 {
+		return nil, &smithy.GenericAPIError{
+			Code:    "LimitExceededException",
+			Message: "Rate exceeded by AWS Cost Explorer",
+			Fault:   smithy.FaultClient,
+		}
+	}
+	return &costexplorer.GetCostAndUsageOutput{
+		ResultsByTime: []cetypes.ResultByTime{
+			{
+				Total: map[string]cetypes.MetricValue{
+					"UnblendedCost": {Amount: aws.String("10.00"), Unit: aws.String("USD")},
+				},
+			},
+		},
+	}, nil
+}
+
+func (s *smithyThrottlingCEClient) GetDimensionValues(ctx context.Context, params *costexplorer.GetDimensionValuesInput, optFns ...func(*costexplorer.Options)) (*costexplorer.GetDimensionValuesOutput, error) {
+	return &costexplorer.GetDimensionValuesOutput{}, nil
+}
+
+func TestSmithyAPIErrorRetry(t *testing.T) {
+	ceMock := &smithyThrottlingCEClient{}
+	stsMock := &mockSTSClient{accountID: "111122223333"}
+	client := NewClient(ceMock, stsMock)
+
+	input := &costexplorer.GetCostAndUsageInput{}
+	out, err := client.getCostAndUsageWithRetry(context.Background(), input)
+	if err != nil {
+		t.Fatalf("expected successful retry with typed smithy error, got error: %v", err)
+	}
+	if out == nil || len(out.ResultsByTime) == 0 {
+		t.Fatalf("expected valid results from retry output")
+	}
+	if ceMock.attempts != 2 {
+		t.Errorf("expected exactly 2 attempts, got %d", ceMock.attempts)
+	}
+}
+
+func TestIsRetryableCostExplorerError(t *testing.T) {
+	if isRetryableCostExplorerError(nil) {
+		t.Errorf("nil error should not be retryable")
+	}
+
+	// Typed smithy errors
+	retryableCodes := []string{
+		"LimitExceededException",
+		"ThrottlingException",
+		"Throttling",
+		"RequestThrottledException",
+		"RequestLimitExceeded",
+		"TooManyRequestsException",
+		"ProvisionedThroughputExceededException",
+	}
+	for _, code := range retryableCodes {
+		err := &smithy.GenericAPIError{Code: code, Message: "error message"}
+		if !isRetryableCostExplorerError(err) {
+			t.Errorf("expected code %s to be retryable", code)
+		}
+	}
+
+	// Non-retryable typed error
+	nonRetryableErr := &smithy.GenericAPIError{Code: "ValidationException", Message: "invalid param"}
+	if isRetryableCostExplorerError(nonRetryableErr) {
+		t.Errorf("ValidationException should not be retryable")
+	}
+
+	// String fallback error
+	fallbackErr := errors.New("HTTP 429 TooManyRequests")
+	if !isRetryableCostExplorerError(fallbackErr) {
+		t.Errorf("fallback 429 error should be retryable")
 	}
 }
 
