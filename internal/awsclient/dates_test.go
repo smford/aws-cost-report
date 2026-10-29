@@ -165,3 +165,19 @@ func TestResolveTimePeriodMTD(t *testing.T) {
 		t.Errorf("expected prev billing month desc 'September 2026 (Month-to-Date)', got %q", prev.BillingMonthDesc)
 	}
 }
+
+func TestResolveForecastTimePeriod(t *testing.T) {
+	// 1. Mid-month: Oct 29, 2026 -> Start 2026-10-30, End 2026-11-01
+	nowMid := time.Date(2026, time.October, 29, 10, 0, 0, 0, time.UTC)
+	start1, end1 := ResolveForecastTimePeriod(nowMid)
+	if start1 != "2026-10-30" || end1 != "2026-11-01" {
+		t.Errorf("expected 2026-10-30 to 2026-11-01, got %s to %s", start1, end1)
+	}
+
+	// 2. Month end: Oct 31, 2026 -> Start 2026-11-01, End 2026-12-01
+	nowEnd := time.Date(2026, time.October, 31, 23, 0, 0, 0, time.UTC)
+	start2, end2 := ResolveForecastTimePeriod(nowEnd)
+	if start2 != "2026-11-01" || end2 != "2026-12-01" {
+		t.Errorf("expected 2026-11-01 to 2026-12-01, got %s to %s", start2, end2)
+	}
+}

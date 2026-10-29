@@ -116,6 +116,21 @@ func RenderMarkdown(w io.Writer, r *awsclient.CostReport, writeJobSummary bool, 
 			))
 		}
 	}
+	if r.Forecast != nil {
+		statusBadge := "✅ `Within Budget`"
+		if r.Forecast.ThresholdBreached {
+			statusBadge = "🚨 **PROJECTED TO BREACH BUDGET**"
+		}
+		b.WriteString("\n### 🔮 Projected Month-End Spend Forecast\n\n")
+		b.WriteString(fmt.Sprintf("| Metric | Value (%s) |\n", r.Metadata.Currency))
+		b.WriteString("|:---|---:|\n")
+		b.WriteString(fmt.Sprintf("| **Projected Month-End Spend** | **%s%.2f** |\n", sym, r.Forecast.TotalAmount))
+		b.WriteString(fmt.Sprintf("| Forecasted Remaining Spend | %s%.2f |\n", sym, r.Forecast.MeanAmount))
+		b.WriteString(fmt.Sprintf("| Forecast Window | `%s` to `%s` |\n", r.Forecast.PeriodStart, r.Forecast.PeriodEnd))
+		b.WriteString(fmt.Sprintf("| Confidence Level | %d%% |\n", r.Forecast.PredictionInterval))
+		b.WriteString(fmt.Sprintf("| Guardrail Status | %s |\n", statusBadge))
+	}
+
 	b.WriteString("\n> _Generated automatically by [aws-cost-report](https://github.com/smford/aws-cost-report)_\n")
 
 	mdContent := b.String()

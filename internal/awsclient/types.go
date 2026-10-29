@@ -77,6 +77,16 @@ type MonthlyBreakdown struct {
 	GrandTotal float64            `json:"grand_total"`
 }
 
+// CostForecast holds month-end forecast data from AWS Cost Explorer.
+type CostForecast struct {
+	TotalAmount        float64 `json:"total_amount"`
+	MeanAmount         float64 `json:"mean_amount"`
+	PeriodStart        string  `json:"period_start"`
+	PeriodEnd          string  `json:"period_end"`
+	PredictionInterval int32   `json:"prediction_interval"`
+	ThresholdBreached  bool    `json:"threshold_breached,omitempty"`
+}
+
 // CostReport is the root domain model containing metadata, totals, and line items.
 type CostReport struct {
 	Metadata         ReportMetadata    `json:"metadata"`
@@ -84,6 +94,7 @@ type CostReport struct {
 	Items            []LineItem        `json:"items"`
 	HasComparison    bool              `json:"has_comparison"`
 	MonthlyBreakdown *MonthlyBreakdown `json:"monthly_breakdown,omitempty"`
+	Forecast         *CostForecast     `json:"forecast,omitempty"`
 }
 
 // CurrencySymbol maps a 3-letter ISO currency code to its standard symbol.

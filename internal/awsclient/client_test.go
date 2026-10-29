@@ -40,6 +40,15 @@ func (m *mockCEClient) GetDimensionValues(ctx context.Context, params *costexplo
 	}, nil
 }
 
+func (m *mockCEClient) GetCostForecast(ctx context.Context, params *costexplorer.GetCostForecastInput, optFns ...func(*costexplorer.Options)) (*costexplorer.GetCostForecastOutput, error) {
+	return &costexplorer.GetCostForecastOutput{
+		Total: &cetypes.MetricValue{
+			Amount: aws.String("15.50"),
+			Unit:   aws.String("USD"),
+		},
+	}, nil
+}
+
 type mockSTSClient struct {
 	accountID string
 }
@@ -512,6 +521,10 @@ func (t *throttlingCEClient) GetDimensionValues(ctx context.Context, params *cos
 	return &costexplorer.GetDimensionValuesOutput{}, nil
 }
 
+func (t *throttlingCEClient) GetCostForecast(ctx context.Context, params *costexplorer.GetCostForecastInput, optFns ...func(*costexplorer.Options)) (*costexplorer.GetCostForecastOutput, error) {
+	return &costexplorer.GetCostForecastOutput{}, nil
+}
+
 func TestThrottlingRetry(t *testing.T) {
 	ceMock := &throttlingCEClient{}
 	stsMock := &mockSTSClient{accountID: "111122223333"}
@@ -556,6 +569,10 @@ func (s *smithyThrottlingCEClient) GetCostAndUsage(ctx context.Context, params *
 
 func (s *smithyThrottlingCEClient) GetDimensionValues(ctx context.Context, params *costexplorer.GetDimensionValuesInput, optFns ...func(*costexplorer.Options)) (*costexplorer.GetDimensionValuesOutput, error) {
 	return &costexplorer.GetDimensionValuesOutput{}, nil
+}
+
+func (s *smithyThrottlingCEClient) GetCostForecast(ctx context.Context, params *costexplorer.GetCostForecastInput, optFns ...func(*costexplorer.Options)) (*costexplorer.GetCostForecastOutput, error) {
+	return &costexplorer.GetCostForecastOutput{}, nil
 }
 
 func TestSmithyAPIErrorRetry(t *testing.T) {
@@ -956,5 +973,66 @@ func TestNetMetricsInReport(t *testing.T) {
 	}
 	if report.Items[0].NetAmortizedCost != 85.00 {
 		t.Errorf("expected item NetAmortizedCost 85.00, got %f", report.Items[0].NetAmortizedCost)
+	}
+}
+
+func TestForecastInReport(t *testing.T) {
+	// 1. Mock Report with Forecast
+	cfg := config.DefaultConfig()
+	cfg.Forecast = true
+	cfg.Budget.FailOnThreshold = 25.00 // Total mock is ~21.58 + 6.92 = 28.50, should breach
+	refTime := time.Date(2026, time.October, 29, 12, 0, 0, 0, time.UTC)
+
+	mockReport, err := GenerateMockReport(cfg, refTime)
+	if err != nil {
+		t.Fatalf("GenerateMockReport failed: %v", err)
+	}
+	if mockReport.Forecast == nil {
+		t.Fatalf("expected Forecast to be populated")
+	}
+	if mockReport.Forecast.TotalAmount <= 0 {
+		t.Errorf("expected TotalAmount > 0, got %f", mockReport.Forecast.TotalAmount)
+	}
+	if !mockReport.Forecast.ThresholdBreached {
+		t.Errorf("expected ThresholdBreached true (28.50 > 25.00)")
+	}
+
+	// 2. Real Client with Forecast
+	page := &costexplorer.GetCostAndUsageOutput{
+		ResultsByTime: []cetypes.ResultByTime{
+			{
+				TimePeriod: &cetypes.DateInterval{
+					Start: aws.String("2026-10-01"),
+					End:   aws.String("2026-10-29"),
+				},
+				Total: map[string]cetypes.MetricValue{
+					"UnblendedCost": {Amount: aws.String("50.00"), Unit: aws.String("USD")},
+				},
+			},
+		},
+	}
+	ceMock := &mockCEClient{pages: []*costexplorer.GetCostAndUsageOutput{page}}
+	stsMock := &mockSTSClient{accountID: "111222333444"}
+	client := &Client{ceClient: ceMock, stsClient: stsMock}
+
+	cfg2 := config.DefaultConfig()
+	cfg2.Forecast = true
+	cfg2.Budget.FailOnThreshold = 60.00 // 50.00 current + 15.50 remaining = 65.50 > 60.00 -> breach
+
+	report, err := client.GenerateReport(context.Background(), cfg2, refTime)
+	if err != nil {
+		t.Fatalf("GenerateReport failed: %v", err)
+	}
+	if report.Forecast == nil {
+		t.Fatalf("expected Forecast to be populated in report")
+	}
+	if report.Forecast.MeanAmount != 15.50 {
+		t.Errorf("expected MeanAmount 15.50, got %f", report.Forecast.MeanAmount)
+	}
+	if report.Forecast.TotalAmount != 65.50 {
+		t.Errorf("expected TotalAmount 65.50 (50.00 + 15.50), got %f", report.Forecast.TotalAmount)
+	}
+	if !report.Forecast.ThresholdBreached {
+		t.Errorf("expected ThresholdBreached true")
 	}
 }

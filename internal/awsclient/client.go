@@ -28,6 +28,7 @@ import (
 type CostExplorerAPI interface {
 	GetCostAndUsage(ctx context.Context, params *costexplorer.GetCostAndUsageInput, optFns ...func(*costexplorer.Options)) (*costexplorer.GetCostAndUsageOutput, error)
 	GetDimensionValues(ctx context.Context, params *costexplorer.GetDimensionValuesInput, optFns ...func(*costexplorer.Options)) (*costexplorer.GetDimensionValuesOutput, error)
+	GetCostForecast(ctx context.Context, params *costexplorer.GetCostForecastInput, optFns ...func(*costexplorer.Options)) (*costexplorer.GetCostForecastOutput, error)
 }
 
 // STSAPI defines the required STS client interface for account identification.
@@ -383,6 +384,14 @@ func (c *Client) GenerateReport(ctx context.Context, cfg *config.Config, now tim
 
 	if currentMonthly != nil && len(currentMonthly.Months) > 0 {
 		report.MonthlyBreakdown = alignMonthlyBreakdown(currentMonthly, filtered, cfg.Grouping.Key)
+	}
+
+	if cfg.Forecast {
+		forecast, err := c.fetchCostForecast(ctx, cfg, now, report.Totals.UnblendedCost)
+		if err != nil {
+			return nil, err
+		}
+		report.Forecast = forecast
 	}
 
 	return report, nil
@@ -935,6 +944,24 @@ func GenerateMockReport(cfg *config.Config, now time.Time) (*CostReport, error) 
 		report.Metadata.EstimatedOrFinal = "Estimated"
 	}
 
+	if cfg.Forecast {
+		startStr, endStr := ResolveForecastTimePeriod(now)
+		remaining := 6.92
+		projected := roundToTwo(totals.UnblendedCost + remaining)
+		breached := false
+		if cfg.Budget.FailOnThreshold > 0 && projected > cfg.Budget.FailOnThreshold {
+			breached = true
+		}
+		report.Forecast = &CostForecast{
+			TotalAmount:        projected,
+			MeanAmount:         remaining,
+			PeriodStart:        startStr,
+			PeriodEnd:          endStr,
+			PredictionInterval: 80,
+			ThresholdBreached:  breached,
+		}
+	}
+
 	// Generate monthly breakdown if multi-month or monthly mode requested
 	if cfg.Monthly || cfg.MonthsBack > 1 {
 		var months []MonthlyBucket
@@ -1177,6 +1204,91 @@ func (c *Client) getCostAndUsageWithRetry(ctx context.Context, input *costexplor
 		return nil, err
 	}
 	return nil, fmt.Errorf("exhausted retries")
+}
+
+func (c *Client) getCostForecastWithRetry(ctx context.Context, input *costexplorer.GetCostForecastInput) (*costexplorer.GetCostForecastOutput, error) {
+	maxRetries := 5
+	backoff := 300 * time.Millisecond
+
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		out, err := c.ceClient.GetCostForecast(ctx, input)
+		if err == nil {
+			return out, nil
+		}
+
+		if attempt == maxRetries {
+			return nil, err
+		}
+
+		if isRetryableCostExplorerError(err) {
+			sleepDur := backoff + time.Duration(rand.Intn(200))*time.Millisecond
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(sleepDur):
+			}
+			backoff *= 2
+			continue
+		}
+
+		return nil, err
+	}
+	return nil, fmt.Errorf("exhausted retries")
+}
+
+// ResolveForecastTimePeriod determines the future date range for AWS Cost Explorer GetCostForecast.
+// The start date must be tomorrow or later, and the end date is the 1st of next month (or month after).
+func ResolveForecastTimePeriod(now time.Time) (string, string) {
+	tomorrow := now.AddDate(0, 0, 1)
+	startStr := tomorrow.Format(DateFormat)
+
+	year, month, _ := now.Date()
+	firstOfNextMonth := time.Date(year, month+1, 1, 0, 0, 0, 0, time.UTC)
+	if tomorrow.After(firstOfNextMonth) || tomorrow.Equal(firstOfNextMonth) {
+		firstOfNextNextMonth := time.Date(year, month+2, 1, 0, 0, 0, 0, time.UTC)
+		return startStr, firstOfNextNextMonth.Format(DateFormat)
+	}
+	return startStr, firstOfNextMonth.Format(DateFormat)
+}
+
+func (c *Client) fetchCostForecast(ctx context.Context, cfg *config.Config, now time.Time, currentSpend float64) (*CostForecast, error) {
+	startStr, endStr := ResolveForecastTimePeriod(now)
+	predictionInterval := int32(80)
+
+	input := &costexplorer.GetCostForecastInput{
+		Granularity: cetypes.GranularityMonthly,
+		Metric:      cetypes.MetricUnblendedCost,
+		TimePeriod: &cetypes.DateInterval{
+			Start: aws.String(startStr),
+			End:   aws.String(endStr),
+		},
+		PredictionIntervalLevel: &predictionInterval,
+	}
+
+	output, err := c.getCostForecastWithRetry(ctx, input)
+	if err != nil {
+		return nil, fmt.Errorf("AWS Cost Explorer GetCostForecast failed: %w", err)
+	}
+
+	var remainingAmount float64
+	if output.Total != nil && output.Total.Amount != nil {
+		remainingAmount = parseFloat(*output.Total.Amount)
+	}
+
+	projectedTotal := roundToTwo(currentSpend + remainingAmount)
+	forecast := &CostForecast{
+		TotalAmount:        projectedTotal,
+		MeanAmount:         roundToTwo(remainingAmount),
+		PeriodStart:        startStr,
+		PeriodEnd:          endStr,
+		PredictionInterval: predictionInterval,
+	}
+
+	if cfg.Budget.FailOnThreshold > 0 && projectedTotal > cfg.Budget.FailOnThreshold {
+		forecast.ThresholdBreached = true
+	}
+
+	return forecast, nil
 }
 
 func applyTopNAggregation(items []LineItem, top int, groupKey string) []LineItem {

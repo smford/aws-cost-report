@@ -61,6 +61,7 @@ jobs:
 | `teams-webhook` | Incoming Microsoft Teams webhook URL for automated ChatOps | `""` |
 | `write-summary` | Write report to `$GITHUB_STEP_SUMMARY` | `true` |
 | `monthly` | Render multi-month historical breakdown in column format | `false` |
+| `forecast` | Query AWS Cost Explorer projected month-end spend forecast and guardrail | `false` |
 | `mock` | Run offline with synthetic dataset | `false` |
 | `output-file` | Optional path to save output file or `s3://` URI | `""` |
 | `s3-bucket` | Target AWS S3 bucket name for saving report output | `""` |
@@ -189,6 +190,20 @@ aws-cost-report generate --mtd
 
 # Compare current MTD spend against the same day window last month
 aws-cost-report generate --mtd --compare
+```
+
+---
+
+## Predictive Budget Forecast Guardrail (`--forecast`)
+
+Use AWS Cost Explorer's machine learning engine to project total month-end spend and trigger budget alerts before overruns occur:
+
+```bash
+# Query projected month-end spend forecast:
+aws-cost-report generate --forecast
+
+# Combine with budget threshold to alert or fail if projected spend breaches limit:
+aws-cost-report generate --forecast --threshold=500.00
 ```
 
 ---

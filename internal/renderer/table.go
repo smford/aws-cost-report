@@ -138,6 +138,23 @@ func RenderTable(w io.Writer, r *awsclient.CostReport, noColor bool) error {
 	}
 	b.WriteString(divDouble + "\n")
 
+	if r.Forecast != nil {
+		b.WriteString("\n🔮 PROJECTED MONTH-END SPEND FORECAST\n")
+		b.WriteString(divSingle + "\n")
+		statusStr := "PASSED (Within Budget)"
+		if r.Forecast.ThresholdBreached {
+			statusStr = "ALERT (Projected to Breach)"
+		}
+		b.WriteString(fmt.Sprintf(" %-28s | %18s\n", "Forecast Metric", "Projected Spend ("+r.Metadata.Currency+")"))
+		b.WriteString(divSingle + "\n")
+		b.WriteString(fmt.Sprintf(" %-28s | %18.2f\n", "Projected Month-End Spend", r.Forecast.TotalAmount))
+		b.WriteString(fmt.Sprintf(" %-28s | %18.2f\n", "Forecasted Remaining Spend", r.Forecast.MeanAmount))
+		b.WriteString(fmt.Sprintf(" %-28s | %18s\n", "Forecast Window", r.Forecast.PeriodStart+" to "+r.Forecast.PeriodEnd))
+		b.WriteString(fmt.Sprintf(" %-28s | %17d%%\n", "Confidence Interval", r.Forecast.PredictionInterval))
+		b.WriteString(fmt.Sprintf(" %-28s | %18s\n", "Guardrail Status", statusStr))
+		b.WriteString(divDouble + "\n")
+	}
+
 	_, err := io.WriteString(w, b.String())
 	return err
 }

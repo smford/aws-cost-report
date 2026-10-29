@@ -32,7 +32,8 @@ A production-grade, zero-dependency (outside official AWS SDK v2 and YAML parser
 - **Multi-Month Column Breakdown (`--monthly` / `--trend`)**: View up to 12+ historical months side-by-side in multi-column format (each month has its own column, plus total), in terminal tables, Markdown, CSV, and JSON.
 - **Month-to-Date Tracking (`--mtd` / `--current-month`)**: Query real-time in-progress spend from the 1st of the current month up to today with automatic MoM comparison against the same date window last month.
 - **Multi-Dimension Grouping**: Group by AWS `SERVICE`, `LINKED_ACCOUNT`, or custom Cost Allocation Tags (`TAG:Environment`, `TAG:Project`, etc.).
-- **SRE Budget Guardrails (`--fail-on-threshold`)**: Blocks CI/CD pipelines by terminating with exit code `1` if total billing exceeds a configured dollar threshold.
+- **SRE Budget Guardrails (`--fail-on-threshold` / `--threshold`)**: Blocks CI/CD pipelines by terminating with exit code `1` if total billing exceeds a configured dollar threshold.
+- **Predictive Forecast Guardrail (`--forecast`)**: Uses AWS Cost Explorer machine learning (`GetCostForecast`) to project month-end spend and warn or fail pipelines before overruns occur.
 - **Multi-Format Output Engines**:
   - `table`: Clean fixed-width ASCII tables formatted like official AWS billing statements.
   - `markdown`: GitHub-flavored Markdown automatically written to `$GITHUB_STEP_SUMMARY` in CI/CD.
@@ -344,12 +345,16 @@ Query custom date intervals (for custom ranges, comparison periods match the exa
 aws-cost-report generate --start=2026-08-01 --end=2026-09-30
 ```
 
-### 13. SRE Budget Guardrail (CI/CD Quality Gate)
-Exit with status code `1` if total unblended cost exceeds threshold:
+### 13. SRE Budget Guardrail & Predictive Forecast (CI/CD Quality Gate)
+Exit with status code `1` if total unblended cost exceeds threshold, or enable `--forecast` to alert when projected month-end spend is on track to breach your budget:
 
 ```bash
+# Fail CI/CD step if current spend exceeds $50.00:
 aws-cost-report generate --threshold=50.00
 echo $? # Returns 1 if total cost > $50.00, or 0 if within budget
+
+# Predictive Budget Guardrail: Fail CI/CD step if projected month-end spend breaches $50.00:
+aws-cost-report generate --forecast --threshold=50.00
 ```
 
 ### 14. Export to JSON or CSV
@@ -482,6 +487,7 @@ jobs:
 | `currency` | Override currency code and symbol (e.g. `USD`, `EUR`, `GBP`). Auto-detected from AWS by default. | `""` | No |
 | `monthly` | Render multi-month historical breakdown in column format (`true`/`false`) | `false` | No |
 | `mtd` | Query Month-to-Date spend from 1st of month up to today (`true`/`false`) | `false` | No |
+| `forecast` | Query AWS Cost Explorer projected month-end spend forecast and guardrail (`true`/`false`) | `false` | No |
 | `output-file` | Optional path to save the formatted report to disk or `s3://` URI | `""` | No |
 | `s3-bucket` | Target S3 bucket name for saving report output | `""` | No |
 | `s3-key` | Optional S3 object key prefix/path (default: based on output file name) | `""` | No |
@@ -496,6 +502,8 @@ jobs:
 | `cost-delta` | Absolute dollar difference (`total - previous`) | `0.45` |
 | `cost-delta-pct` | Percentage change in total cost | `2.13` |
 | `threshold-breached` | `true` if total cost exceeded configured `threshold` | `false` |
+| `forecast-amount` | Projected month-end spend amount if `--forecast` enabled | `28.50` |
+| `forecast-breached` | `true` if projected month-end spend breached `threshold` | `false` |
 | `report-file` | Destination file path if `output-file` was set | `./cost-report.md` |
 
 ### Automated PR / Slack Notification Example
@@ -680,6 +688,7 @@ To run `aws-cost-report`, the executing IAM principal requires read permissions 
 |:---|:---|:---|:---|
 | `--compare` | | `false` | Enable Month-over-Month (MoM) comparison against preceding billing period |
 | `--mtd` | `--current-month` | `false` | Query Month-to-Date spend from the 1st of the current month up to today |
+| `--forecast` | | `false` | Query AWS Cost Explorer machine learning forecast for projected month-end spend |
 | `--monthly` | `--trend` | `false` | Display multi-month historical breakdown with each month as a separate column (default: 12 months) |
 | `--format` | | `table` | Output format: `table`, `markdown`, `json`, `csv`, `prometheus` |
 | `--filter` | `--service` | | Filter services by official name (`Amazon DynamoDB`), alias (`S3`, `EC2`), or substring |

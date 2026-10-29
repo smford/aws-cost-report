@@ -389,3 +389,54 @@ func TestRenderNetMetrics(t *testing.T) {
 		t.Errorf("expected aws_cost_report_total_net_amortized_dollars in prom output")
 	}
 }
+
+func TestRenderForecast(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.Forecast = true
+	cfg.Budget.FailOnThreshold = 20.00 // breach
+
+	refTime := time.Date(2026, time.October, 29, 12, 0, 0, 0, time.UTC)
+	report, err := awsclient.GenerateMockReport(cfg, refTime)
+	if err != nil {
+		t.Fatalf("GenerateMockReport failed: %v", err)
+	}
+
+	// 1. Table
+	var tableBuf bytes.Buffer
+	if err := RenderTable(&tableBuf, report, false); err != nil {
+		t.Fatalf("RenderTable failed: %v", err)
+	}
+	tableOut := tableBuf.String()
+	if !strings.Contains(tableOut, "PROJECTED MONTH-END SPEND FORECAST") {
+		t.Errorf("expected forecast section in table, got:\n%s", tableOut)
+	}
+	if !strings.Contains(tableOut, "Projected Month-End Spend") {
+		t.Errorf("expected Projected Month-End Spend in table, got:\n%s", tableOut)
+	}
+
+	// 2. Markdown
+	var mdBuf bytes.Buffer
+	if err := RenderMarkdown(&mdBuf, report, false, 0); err != nil {
+		t.Fatalf("RenderMarkdown failed: %v", err)
+	}
+	mdOut := mdBuf.String()
+	if !strings.Contains(mdOut, "### 🔮 Projected Month-End Spend Forecast") {
+		t.Errorf("expected forecast heading in markdown, got:\n%s", mdOut)
+	}
+	if !strings.Contains(mdOut, "PROJECTED TO BREACH BUDGET") {
+		t.Errorf("expected breach alert in markdown, got:\n%s", mdOut)
+	}
+
+	// 3. Prometheus
+	var promBuf bytes.Buffer
+	if err := RenderPrometheus(&promBuf, report, 20.00, "v1", "test", "today"); err != nil {
+		t.Fatalf("RenderPrometheus failed: %v", err)
+	}
+	promOut := promBuf.String()
+	if !strings.Contains(promOut, "aws_cost_report_forecast_total_dollars") {
+		t.Errorf("expected aws_cost_report_forecast_total_dollars in prom output")
+	}
+	if !strings.Contains(promOut, "aws_cost_report_forecast_threshold_breached") {
+		t.Errorf("expected aws_cost_report_forecast_threshold_breached in prom output")
+	}
+}

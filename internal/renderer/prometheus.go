@@ -86,6 +86,24 @@ func RenderPrometheus(w io.Writer, r *awsclient.CostReport, threshold float64, v
 		sb.WriteString(fmt.Sprintf("aws_cost_report_budget_threshold_breached{%s} %d\n", labels, breached))
 	}
 
+	if r.Forecast != nil {
+		sb.WriteString("# HELP aws_cost_report_forecast_total_dollars Projected month-end total spend\n")
+		sb.WriteString("# TYPE aws_cost_report_forecast_total_dollars gauge\n")
+		sb.WriteString(fmt.Sprintf("aws_cost_report_forecast_total_dollars{%s} %.2f\n", labels, r.Forecast.TotalAmount))
+
+		sb.WriteString("# HELP aws_cost_report_forecast_remaining_dollars Forecasted remaining spend until month end\n")
+		sb.WriteString("# TYPE aws_cost_report_forecast_remaining_dollars gauge\n")
+		sb.WriteString(fmt.Sprintf("aws_cost_report_forecast_remaining_dollars{%s} %.2f\n", labels, r.Forecast.MeanAmount))
+
+		forecastBreach := 0
+		if r.Forecast.ThresholdBreached {
+			forecastBreach = 1
+		}
+		sb.WriteString("# HELP aws_cost_report_forecast_threshold_breached 1 if projected spend breaches budget threshold\n")
+		sb.WriteString("# TYPE aws_cost_report_forecast_threshold_breached gauge\n")
+		sb.WriteString(fmt.Sprintf("aws_cost_report_forecast_threshold_breached{%s} %d\n", labels, forecastBreach))
+	}
+
 	// Service/Item breakdown metrics
 	sb.WriteString("# HELP aws_cost_report_service_unblended_dollars Unblended cost breakdown by service or dimension\n")
 	sb.WriteString("# TYPE aws_cost_report_service_unblended_dollars gauge\n")

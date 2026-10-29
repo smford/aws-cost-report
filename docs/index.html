@@ -402,9 +402,13 @@ curl http://localhost:8080/metrics
 # Or export directly via CLI:
 aws-cost-report generate --format=prometheus</code></pre>
 
-      <h3>Budget Guardrail</h3>
-      <pre><code>aws-cost-report generate --threshold=50.00
-# Returns exit code 1 if total cost exceeds $50.00</code></pre>
+      <h3>Budget Guardrail & Predictive Forecast</h3>
+      <p>Terminate with exit code 1 if current spend breaches your budget, or use machine learning predictions to alert if projected month-end spend is on track to breach your limit:</p>
+      <pre><code># Guardrail on actual spend:
+aws-cost-report generate --threshold=50.00
+
+# Predictive guardrail on projected month-end spend:
+aws-cost-report generate --forecast --threshold=50.00</code></pre>
 
       <h3>GitHub Actions Job Summary</h3>
       <pre><code>aws-cost-report generate --format=markdown --compare</code></pre>

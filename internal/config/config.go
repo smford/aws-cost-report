@@ -144,6 +144,7 @@ type Config struct {
 	S3Key            string            `yaml:"s3_key"`
 	Monthly          bool              `yaml:"monthly"`
 	MTD              bool              `yaml:"mtd"`
+	Forecast         bool              `yaml:"forecast"`
 
 	// Runtime options resolved from CLI flags or env
 	ConfigFile            string       `yaml:"-"`
@@ -278,6 +279,7 @@ func LoadConfig(args []string) (*Config, error) {
 		monthlyBrk   = fs.Bool("monthly-breakdown", false, "Alias for --monthly")
 		mtdFlag      = fs.Bool("mtd", false, "Query Month-to-Date spend from the 1st of the current month up to today")
 		currMonthFlg = fs.Bool("current-month", false, "Alias for --mtd")
+		forecastFlag = fs.Bool("forecast", false, "Query AWS Cost Explorer projected month-end spend forecast and guardrail")
 		servicesFlag = fs.Bool("services", false, "List official AWS Cost Explorer service names")
 		listServFlag = fs.Bool("list-services", false, "Alias for --services")
 	)
@@ -464,6 +466,10 @@ func LoadConfig(args []string) (*Config, error) {
 		cfg.MTD = true
 	} else if cfg.Defaults.MTD {
 		cfg.MTD = true
+	}
+
+	if *forecastFlag {
+		cfg.Forecast = true
 	}
 
 	if cfg.Monthly && cfg.MonthsBack <= 1 && *months == 0 {

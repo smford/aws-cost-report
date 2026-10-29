@@ -114,6 +114,10 @@ inputs:
     description: 'Query Month-to-Date spend from the 1st of the current month up to today (true/false)'
     required: false
     default: 'false'
+  forecast:
+    description: 'Query AWS Cost Explorer projected month-end spend forecast and guardrail (true/false)'
+    required: false
+    default: 'false'
 
 outputs:
   report:
@@ -134,6 +138,12 @@ outputs:
   threshold-breached:
     description: 'Whether the budget threshold was breached (true/false)'
     value: ${{ steps.run-report.outputs.threshold_breached }}
+  forecast-amount:
+    description: 'Projected month-end spend amount'
+    value: ${{ steps.run-report.outputs.forecast_amount }}
+  forecast-breached:
+    description: 'Whether projected month-end spend breached threshold (true/false)'
+    value: ${{ steps.run-report.outputs.forecast_breached }}
   report-file:
     description: 'File path where the report was saved if output-file was specified'
     value: ${{ steps.run-report.outputs.report_file }}
@@ -324,6 +334,10 @@ runs:
           ARGS+=("--currency=${{ inputs.currency }}")
         fi
 
+        if [ "${{ inputs.forecast }}" = "true" ]; then
+          ARGS+=("--forecast")
+        fi
+
         REPORT_TMP="${RUNNER_TEMP:-/tmp}/aws-cost-report-output.txt"
         SUMMARY_TMP="${RUNNER_TEMP:-/tmp}/aws-cost-report-summary.json"
 
@@ -370,6 +384,10 @@ runs:
           echo "cost_delta=${COST_DELTA}" >> "$GITHUB_OUTPUT"
           echo "cost_delta_pct=${COST_DELTA_PCT}" >> "$GITHUB_OUTPUT"
           echo "threshold_breached=${BREACHED}" >> "$GITHUB_OUTPUT"
+          FORECAST_AMOUNT=$(jq -r '.forecast_amount // "0.00"' "$SUMMARY_TMP")
+          FORECAST_BREACHED=$(jq -r '.forecast_breached // false' "$SUMMARY_TMP")
+          echo "forecast_amount=${FORECAST_AMOUNT}" >> "$GITHUB_OUTPUT"
+          echo "forecast_breached=${FORECAST_BREACHED}" >> "$GITHUB_OUTPUT"
         else
           if [ -n "${{ inputs.threshold }}" ] && [ "$EXIT_CODE" -ne 0 ]; then
             echo "threshold_breached=true" >> "$GITHUB_OUTPUT"

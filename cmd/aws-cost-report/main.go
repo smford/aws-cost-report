@@ -326,8 +326,19 @@ func runCLI(cfg *config.Config) {
 	}
 
 	thresholdBreached := cfg.Budget.FailOnThreshold > 0.00 && report.Totals.UnblendedCost > cfg.Budget.FailOnThreshold
+	if cfg.Forecast && report.Forecast != nil && cfg.Budget.FailOnThreshold > 0.00 && report.Forecast.TotalAmount > cfg.Budget.FailOnThreshold {
+		thresholdBreached = true
+		report.Forecast.ThresholdBreached = true
+	}
 
 	if cfg.JSONSummaryFile != "" {
+		forecastAmount := 0.0
+		forecastBreached := false
+		if report.Forecast != nil {
+			forecastAmount = report.Forecast.TotalAmount
+			forecastBreached = report.Forecast.ThresholdBreached
+		}
+
 		summary := struct {
 			TotalCost         float64 `json:"total_cost"`
 			PreviousCost      float64 `json:"previous_cost"`
@@ -336,6 +347,8 @@ func runCLI(cfg *config.Config) {
 			Currency          string  `json:"currency"`
 			Threshold         float64 `json:"threshold"`
 			ThresholdBreached bool    `json:"threshold_breached"`
+			ForecastAmount    float64 `json:"forecast_amount,omitempty"`
+			ForecastBreached  bool    `json:"forecast_breached,omitempty"`
 		}{
 			TotalCost:         report.Totals.UnblendedCost,
 			PreviousCost:      report.Totals.PrevUnblendedCost,
@@ -344,6 +357,8 @@ func runCLI(cfg *config.Config) {
 			Currency:          report.Metadata.Currency,
 			Threshold:         cfg.Budget.FailOnThreshold,
 			ThresholdBreached: thresholdBreached,
+			ForecastAmount:    forecastAmount,
+			ForecastBreached:  forecastBreached,
 		}
 
 		if data, err := json.MarshalIndent(summary, "", "  "); err == nil {
@@ -370,8 +385,13 @@ func runCLI(cfg *config.Config) {
 	// Budget guardrail check
 	if thresholdBreached {
 		sym := report.Metadata.CurrencySymbol()
-		fmt.Fprintf(os.Stderr, "\n[BUDGET ALERT] Total cost (%s%.2f %s) exceeds configured threshold (%s%.2f %s)!\n",
-			sym, report.Totals.UnblendedCost, report.Metadata.Currency, sym, cfg.Budget.FailOnThreshold, report.Metadata.Currency)
+		if report.Totals.UnblendedCost > cfg.Budget.FailOnThreshold {
+			fmt.Fprintf(os.Stderr, "\n[BUDGET ALERT] Total cost (%s%.2f %s) exceeds configured threshold (%s%.2f %s)!\n",
+				sym, report.Totals.UnblendedCost, report.Metadata.Currency, sym, cfg.Budget.FailOnThreshold, report.Metadata.Currency)
+		} else if report.Forecast != nil && report.Forecast.ThresholdBreached {
+			fmt.Fprintf(os.Stderr, "\n[BUDGET ALERT] Projected month-end spend (%s%.2f %s) is on track to breach configured threshold (%s%.2f %s)!\n",
+				sym, report.Forecast.TotalAmount, report.Metadata.Currency, sym, cfg.Budget.FailOnThreshold, report.Metadata.Currency)
+		}
 		os.Exit(1)
 	}
 }
