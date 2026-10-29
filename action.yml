@@ -7,9 +7,9 @@ branding:
 
 inputs:
   version:
-    description: 'Version of aws-cost-report binary to execute (e.g. v0.1.0, latest, or local)'
+    description: 'Version of aws-cost-report binary to execute (e.g. v0.6.0, latest, or local)'
     required: false
-    default: 'v0.1.0'
+    default: 'latest'
   compare:
     description: 'Include Month-over-Month comparison with preceding period (true/false)'
     required: false
@@ -165,7 +165,11 @@ runs:
 
         VERSION="${{ inputs.version }}"
         if [ -z "$VERSION" ] || [ "$VERSION" = "latest" ]; then
-          VERSION="v0.1.0"
+          LATEST_URL=$(curl -sI https://github.com/smford/aws-cost-report/releases/latest | grep -i "^location:" | tr -d '\r\n')
+          VERSION="${LATEST_URL##*/}"
+          if [ -z "$VERSION" ] || [ "$VERSION" = "latest" ]; then
+            VERSION="v0.6.0"
+          fi
         fi
         VER_NUM="${VERSION#v}"
 

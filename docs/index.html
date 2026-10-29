@@ -288,7 +288,7 @@ brew install aws-cost-report</code></pre>
       <h3>3. GitHub Action</h3>
       <p>Drop <code>aws-cost-report</code> directly into your GitHub Actions workflow:</p>
       <pre><code>- name: Run AWS Cost Report
-  uses: smford/aws-cost-report@v0.1.0
+  uses: smford/aws-cost-report@latest
   with:
     compare: 'true'
     threshold: '500.00'
@@ -371,7 +371,7 @@ aws-cost-report generate --tag="Environment=Production" --group-by="LINKED_ACCOU
       <h3>SRE Workflow with Threshold Outputs</h3>
       <pre><code>- name: Run AWS Cost Report
   id: cost
-  uses: smford/aws-cost-report@v0.1.0
+  uses: smford/aws-cost-report@latest
   with:
     compare: 'true'
     threshold: '1000.00'

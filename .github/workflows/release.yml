@@ -95,6 +95,12 @@ jobs:
             echo "HEAD is already tagged as ${TAG_NAME}."
           fi
 
+          echo "Updating 'latest' tag to point to HEAD (${TAG_NAME})..."
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -f -a "latest" -m "Latest release (${TAG_NAME})" HEAD^{commit}
+          git push origin "latest" --force
+
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
