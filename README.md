@@ -558,44 +558,44 @@ jobs:
 
 | Input | Description | Default | Required |
 |:---|:---|:---|:---:|
-| `version` | Version of `aws-cost-report` binary to run (e.g. `v0.7.0` or `latest`) | `latest` | No |
-| `compare` | Enable Month-over-Month comparison against preceding period (`true`/`false`) | `true` | No |
-| `format` | Report output format (`markdown`, `table`, `json`, `csv`) | `markdown` | No |
-| `months` | Number of historical months back to query | `1` | No |
-| `start` | Explicit billing start date (`YYYY-MM-01` or `YYYY-MM-DD`) | `""` | No |
-| `end` | Explicit billing end date (`YYYY-MM-01` or `YYYY-MM-DD`) | `""` | No |
-| `group-by` | Grouping dimension(s), up to 2 comma-separated (`SERVICE`, `LINKED_ACCOUNT`, `TAG:<Key>`) | `SERVICE` | No |
-| `name` | Human-readable name or alias for the AWS account (e.g. `Production Core`) | `""` | No |
 | `account-name` | Alias for `name` | `""` | No |
-| `filter` | Comma-separated substring filter for services (e.g. `DynamoDB,Lambda`) | `""` | No |
-| `tag` | Filter costs by AWS Cost Allocation Tag (e.g. `Environment=Production` or `Environment=Prod,Stage`) | `""` | No |
-| `tag-filter` | Alias for `tag` | `""` | No |
-| `exclude-credits` | Exclude promotional credits and refunds (`true`/`false`) | `false` | No |
-| `charge-type` | Filter costs by charge/record type (e.g. `Usage,Tax`, `Credit`) | `""` | No |
-| `record-type` | Alias for `charge-type` | `""` | No |
-| `region` | Filter costs by comma-separated AWS regions (e.g. `us-east-1,eu-west-1`) | `""` | No |
 | `assume-role-arn` | AWS IAM Role ARN to assume via STS for cross-account cost auditing | `""` | No |
-| `role-to-assume` | Alias for `assume-role-arn` | `""` | No |
-| `role-session-name` | Optional session name when assuming an IAM role | `""` | No |
-| `threshold` | SRE budget alert dollar threshold (e.g. `500.00`). Exceeding fails the step. | `""` | No |
-| `fail-on-threshold` | Whether to terminate step with failure on threshold breach (`true`/`false`) | `true` | No |
-| `min-cost` | Minimum cost floor to display in itemized breakdown | `""` | No |
-| `top` | Limit breakdown to top N cost drivers and aggregate remainder into "Other" | `""` | No |
-| `slack-webhook` | Incoming Slack webhook URL for automated ChatOps notifications | `""` | No |
-| `teams-webhook` | Incoming Microsoft Teams webhook URL for automated ChatOps notifications | `""` | No |
-| `webhook-url` | Generic HTTP/HTTPS webhook URL for automated JSON cost report dispatch | `""` | No |
-| `write-summary` | Automatically publish markdown table to `$GITHUB_STEP_SUMMARY` | `true` | No |
-| `mock` | Run with offline deterministic mock data (no AWS API calls) | `false` | No |
-| `no-cache` | Disable local query response caching (`true`/`false`) | `false` | No |
+| `charge-type` | Filter costs by charge/record type (e.g. `Usage,Tax`, `Credit`) | `""` | No |
+| `compare` | Enable Month-over-Month comparison against preceding period (`true`/`false`) | `true` | No |
 | `config` | Path to custom YAML configuration file | `""` | No |
 | `currency` | Override currency code and symbol (e.g. `USD`, `EUR`, `GBP`). Auto-detected from AWS by default. | `""` | No |
-| `monthly` | Render multi-month historical breakdown in column format (`true`/`false`) | `false` | No |
-| `mtd` | Query Month-to-Date spend from 1st of month up to today (`true`/`false`) | `false` | No |
 | `daily` | Query daily spend granularity over the billing period (`true`/`false`) | `false` | No |
+| `end` | Explicit billing end date (`YYYY-MM-01` or `YYYY-MM-DD`) | `""` | No |
+| `exclude-credits` | Exclude promotional credits and refunds (`true`/`false`) | `false` | No |
+| `fail-on-threshold` | Whether to terminate step with failure on threshold breach (`true`/`false`) | `true` | No |
+| `filter` | Comma-separated substring filter for services (e.g. `DynamoDB,Lambda`) | `""` | No |
 | `forecast` | Query AWS Cost Explorer projected month-end spend forecast and guardrail (`true`/`false`) | `false` | No |
+| `format` | Report output format (`markdown`, `table`, `html`, `json`, `csv`) | `markdown` | No |
+| `group-by` | Grouping dimension(s), up to 2 comma-separated (`SERVICE`, `LINKED_ACCOUNT`, `TAG:<Key>`) | `SERVICE` | No |
+| `min-cost` | Minimum cost floor to display in itemized breakdown | `""` | No |
+| `mock` | Run with offline deterministic mock data (no AWS API calls) | `false` | No |
+| `monthly` | Render multi-month historical breakdown in column format (`true`/`false`) | `false` | No |
+| `months` | Number of historical months back to query | `1` | No |
+| `mtd` | Query Month-to-Date spend from 1st of month up to today (`true`/`false`) | `false` | No |
+| `name` | Human-readable name or alias for the AWS account (e.g. `Production Core`) | `""` | No |
+| `no-cache` | Disable local query response caching (`true`/`false`) | `false` | No |
 | `output-file` | Optional path to save the formatted report to disk or `s3://` URI | `""` | No |
+| `record-type` | Alias for `charge-type` | `""` | No |
+| `region` | Filter costs by comma-separated AWS regions (e.g. `us-east-1,eu-west-1`) | `""` | No |
+| `role-session-name` | Optional session name when assuming an IAM role | `""` | No |
+| `role-to-assume` | Alias for `assume-role-arn` | `""` | No |
 | `s3-bucket` | Target S3 bucket name for saving report output | `""` | No |
 | `s3-key` | Optional S3 object key prefix/path (default: based on output file name) | `""` | No |
+| `slack-webhook` | Incoming Slack webhook URL for automated ChatOps notifications | `""` | No |
+| `start` | Explicit billing start date (`YYYY-MM-01` or `YYYY-MM-DD`) | `""` | No |
+| `tag` | Filter costs by AWS Cost Allocation Tag (e.g. `Environment=Production` or `Environment=Prod,Stage`) | `""` | No |
+| `tag-filter` | Alias for `tag` | `""` | No |
+| `teams-webhook` | Incoming Microsoft Teams webhook URL for automated ChatOps notifications | `""` | No |
+| `threshold` | SRE budget alert dollar threshold (e.g. `500.00`). Exceeding fails the step. | `""` | No |
+| `top` | Limit breakdown to top N cost drivers and aggregate remainder into "Other" | `""` | No |
+| `version` | Version of `aws-cost-report` binary to run (e.g. `v0.7.0` or `latest`) | `latest` | No |
+| `webhook-url` | Generic HTTP/HTTPS webhook URL for automated JSON cost report dispatch | `""` | No |
+| `write-summary` | Automatically publish markdown table to `$GITHUB_STEP_SUMMARY` | `true` | No |
 
 ### Action Outputs
 
