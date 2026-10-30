@@ -601,15 +601,15 @@ jobs:
 
 | Output | Description | Example |
 |:---|:---|:---|
-| `report` | Full formatted cost report string | Multi-line table/markdown |
-| `total-cost` | Current period total unblended cost | `21.58` |
-| `previous-cost` | Preceding period total unblended cost | `21.13` |
 | `cost-delta` | Absolute dollar difference (`total - previous`) | `0.45` |
 | `cost-delta-pct` | Percentage change in total cost | `2.13` |
-| `threshold-breached` | `true` if total cost exceeded configured `threshold` | `false` |
 | `forecast-amount` | Projected month-end spend amount if `--forecast` enabled | `28.50` |
 | `forecast-breached` | `true` if projected month-end spend breached `threshold` | `false` |
+| `previous-cost` | Preceding period total unblended cost | `21.13` |
+| `report` | Full formatted cost report string | Multi-line table/markdown |
 | `report-file` | Destination file path if `output-file` was set | `./cost-report.md` |
+| `threshold-breached` | `true` if total cost exceeded configured `threshold` | `false` |
+| `total-cost` | Current period total unblended cost | `21.58` |
 
 ### Automated PR / Slack Notification Example
 
