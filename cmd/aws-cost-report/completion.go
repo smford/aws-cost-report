@@ -3,28 +3,30 @@ package main
 import (
 	"fmt"
 	"io"
-	"os"
 	"strings"
 )
 
-func runCompletion(args []string) {
+func runCompletion(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, "Error: shell type required for completion (e.g. 'bash', 'zsh', 'fish')")
-		fmt.Fprintln(os.Stderr, "Usage: aws-cost-report completion [bash|zsh|fish]")
-		os.Exit(1)
+		fmt.Fprintln(stderr, "Error: shell type required for completion (e.g. 'bash', 'zsh', 'fish')")
+		fmt.Fprintln(stderr, "Usage: aws-cost-report completion [bash|zsh|fish]")
+		return 1
 	}
 
 	shell := strings.ToLower(args[0])
 	switch shell {
 	case "bash":
-		generateBashCompletion(os.Stdout)
+		generateBashCompletion(stdout)
+		return 0
 	case "zsh":
-		generateZshCompletion(os.Stdout)
+		generateZshCompletion(stdout)
+		return 0
 	case "fish":
-		generateFishCompletion(os.Stdout)
+		generateFishCompletion(stdout)
+		return 0
 	default:
-		fmt.Fprintf(os.Stderr, "Error: unsupported shell %q (supported: bash, zsh, fish)\n", shell)
-		os.Exit(1)
+		fmt.Fprintf(stderr, "Error: unsupported shell %q (supported: bash, zsh, fish)\n", shell)
+		return 1
 	}
 }
 

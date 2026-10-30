@@ -35,8 +35,8 @@ func formatVersion() string {
 	return fmt.Sprintf("aws-cost-report %s (commit: %s, date: %s)\nCopyright (c) 2026 smford\nLicensed under the MIT licence.\n", version, commit, date)
 }
 
-func printVersion() {
-	fmt.Print(formatVersion())
+func printVersion(w io.Writer) {
+	fmt.Fprint(w, formatVersion())
 }
 
 func formatHelp() string {
@@ -142,17 +142,19 @@ Use "aws-cost-report <command> --help" for more information about a command.
 `
 }
 
-func printHelp() {
-	fmt.Print(formatHelp())
+func printHelp(w io.Writer) {
+	fmt.Fprint(w, formatHelp())
 }
 
 func main() {
-	args := os.Args[1:]
+	os.Exit(Run(os.Args[1:], os.Stdout, os.Stderr))
+}
 
-	// If no arguments are passed, immediately display help and exit cleanly (no AWS auth pause!)
+// Run executes the CLI command and returns the process exit code (0 for success, 1 for failure).
+func Run(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
-		printHelp()
-		os.Exit(0)
+		printHelp(stdout)
+		return 0
 	}
 
 	cmd := args[0]
@@ -160,14 +162,13 @@ func main() {
 
 	switch cmd {
 	case "help", "-h", "--help":
-		printHelp()
-		os.Exit(0)
+		printHelp(stdout)
+		return 0
 	case "version", "-v", "--version":
-		printVersion()
-		os.Exit(0)
+		printVersion(stdout)
+		return 0
 	case "completion":
-		runCompletion(args[1:])
-		os.Exit(0)
+		return runCompletion(args[1:], stdout, stderr)
 	case "generate":
 		cmdArgs = args[1:]
 	case "services", "list-services", "--services", "--list-services":
@@ -179,40 +180,39 @@ func main() {
 		if strings.HasPrefix(cmd, "-") {
 			cmdArgs = args
 		} else {
-			fmt.Fprintf(os.Stderr, "Error: unknown command %q\nRun 'aws-cost-report help' for usage.\n", cmd)
-			os.Exit(1)
+			fmt.Fprintf(stderr, "Error: unknown command %q\nRun 'aws-cost-report help' for usage.\n", cmd)
+			return 1
 		}
 	}
 
 	cfg, err := config.LoadConfig(cmdArgs)
 	if err != nil {
 		if errors.Is(err, flag.ErrHelp) {
-			printHelp()
-			os.Exit(0)
+			printHelp(stdout)
+			return 0
 		}
-		fmt.Fprintf(os.Stderr, "Error parsing configuration: %v\n", err)
-		os.Exit(1)
+		fmt.Fprintf(stderr, "Error parsing configuration: %v\n", err)
+		return 1
 	}
 
 	if cfg.ShowVersion {
-		printVersion()
-		os.Exit(0)
+		printVersion(stdout)
+		return 0
 	}
 
 	if cmd == "server" || cfg.RunServer {
 		runServer(cfg)
-		return
+		return 0
 	}
 
 	if cmd == "services" || cfg.ListServices {
-		runListServices(cfg)
-		return
+		return runListServices(cfg, stdout, stderr)
 	}
 
-	runCLI(cfg)
+	return runCLI(cfg, stdout, stderr)
 }
 
-func runListServices(cfg *config.Config) {
+func runListServices(cfg *config.Config, stdout, stderr io.Writer) int {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 
@@ -223,30 +223,31 @@ func runListServices(cfg *config.Config) {
 		var err error
 		client, err = awsclient.NewRealClient(ctx)
 		if err != nil {
-			printCredentialHelp(err)
-			os.Exit(1)
+			printCredentialHelp(stderr, err)
+			return 1
 		}
 	}
 
 	services, err := client.ListServices(ctx, cfg, time.Now())
 	if err != nil {
-		printCredentialHelp(err)
-		os.Exit(1)
+		printCredentialHelp(stderr, err)
+		return 1
 	}
 
 	if cfg.Reporting.Format == "json" {
-		_ = json.NewEncoder(os.Stdout).Encode(services)
-		return
+		_ = json.NewEncoder(stdout).Encode(services)
+		return 0
 	}
 
-	fmt.Println("Official AWS Cost Explorer Service Names:")
+	fmt.Fprintln(stdout, "Official AWS Cost Explorer Service Names:")
 	for _, s := range services {
-		fmt.Printf("  • %s\n", s)
+		fmt.Fprintf(stdout, "  • %s\n", s)
 	}
-	fmt.Printf("\nTotal: %d services available.\nUse these exact names, aliases, or substrings with --filter (e.g. --filter=%q)\n", len(services), services[0])
+	fmt.Fprintf(stdout, "\nTotal: %d services available.\nUse these exact names, aliases, or substrings with --filter (e.g. --filter=%q)\n", len(services), services[0])
+	return 0
 }
 
-func runCLI(cfg *config.Config) {
+func runCLI(cfg *config.Config, stdout, stderr io.Writer) int {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
@@ -257,51 +258,51 @@ func runCLI(cfg *config.Config) {
 		var err error
 		client, err = awsclient.NewRealClient(ctx)
 		if err != nil {
-			printCredentialHelp(err)
-			os.Exit(1)
+			printCredentialHelp(stderr, err)
+			return 1
 		}
 	}
 
 	report, err := client.GenerateReport(ctx, cfg, time.Now())
 	if err != nil {
-		printCredentialHelp(err)
-		os.Exit(1)
+		printCredentialHelp(stderr, err)
+		return 1
 	}
 
 	var buf bytes.Buffer
-	outWriter := io.MultiWriter(os.Stdout, &buf)
+	outWriter := io.MultiWriter(stdout, &buf)
 
 	switch cfg.Reporting.Format {
 	case "markdown", "md":
 		if err := renderer.RenderMarkdown(outWriter, report, cfg.Reporting.WriteJobSummary, cfg.Budget.FailOnThreshold); err != nil {
-			fmt.Fprintf(os.Stderr, "Error rendering markdown: %v\n", err)
-			os.Exit(1)
+			fmt.Fprintf(stderr, "Error rendering markdown: %v\n", err)
+			return 1
 		}
 	case "json":
 		if err := renderer.RenderJSON(outWriter, report); err != nil {
-			fmt.Fprintf(os.Stderr, "Error rendering JSON: %v\n", err)
-			os.Exit(1)
+			fmt.Fprintf(stderr, "Error rendering JSON: %v\n", err)
+			return 1
 		}
 	case "csv":
 		if err := renderer.RenderCSV(outWriter, report); err != nil {
-			fmt.Fprintf(os.Stderr, "Error rendering CSV: %v\n", err)
-			os.Exit(1)
+			fmt.Fprintf(stderr, "Error rendering CSV: %v\n", err)
+			return 1
 		}
 	case "prometheus", "prom":
 		if err := renderer.RenderPrometheus(outWriter, report, cfg.Budget.FailOnThreshold, version, commit, date); err != nil {
-			fmt.Fprintf(os.Stderr, "Error rendering prometheus: %v\n", err)
-			os.Exit(1)
+			fmt.Fprintf(stderr, "Error rendering prometheus: %v\n", err)
+			return 1
 		}
 	default:
 		if err := renderer.RenderTable(outWriter, report, cfg.NoColor); err != nil {
-			fmt.Fprintf(os.Stderr, "Error rendering table: %v\n", err)
-			os.Exit(1)
+			fmt.Fprintf(stderr, "Error rendering table: %v\n", err)
+			return 1
 		}
 	}
 
 	if cfg.OutputFile != "" {
 		if err := saveOutputFile(ctx, client, cfg.OutputFile, buf.Bytes(), cfg.MockMode); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to write output file %s: %v\n", cfg.OutputFile, err)
+			fmt.Fprintf(stderr, "Warning: failed to write output file %s: %v\n", cfg.OutputFile, err)
 		}
 	}
 
@@ -323,7 +324,7 @@ func runCLI(cfg *config.Config) {
 		}
 		s3URI := fmt.Sprintf("s3://%s/%s", cfg.S3Bucket, s3Key)
 		if err := saveOutputFile(ctx, client, s3URI, buf.Bytes(), cfg.MockMode); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to upload report to %s: %v\n", s3URI, err)
+			fmt.Fprintf(stderr, "Warning: failed to upload report to %s: %v\n", s3URI, err)
 		}
 	}
 
@@ -365,7 +366,7 @@ func runCLI(cfg *config.Config) {
 
 		if data, err := json.MarshalIndent(summary, "", "  "); err == nil {
 			if err := saveOutputFile(ctx, client, cfg.JSONSummaryFile, append(data, '\n'), cfg.MockMode); err != nil {
-				fmt.Fprintf(os.Stderr, "Warning: failed to write JSON summary file %s: %v\n", cfg.JSONSummaryFile, err)
+				fmt.Fprintf(stderr, "Warning: failed to write JSON summary file %s: %v\n", cfg.JSONSummaryFile, err)
 			}
 		}
 	}
@@ -373,14 +374,14 @@ func runCLI(cfg *config.Config) {
 	// Dispatch Slack notification if configured
 	if cfg.SlackWebhook != "" {
 		if err := webhook.SendSlackNotification(ctx, cfg.SlackWebhook, report, cfg.Budget.FailOnThreshold); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to dispatch Slack notification: %v\n", err)
+			fmt.Fprintf(stderr, "Warning: failed to dispatch Slack notification: %v\n", err)
 		}
 	}
 
 	// Dispatch Microsoft Teams notification if configured
 	if cfg.TeamsWebhook != "" {
 		if err := webhook.SendTeamsNotification(ctx, cfg.TeamsWebhook, report, cfg.Budget.FailOnThreshold); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to dispatch Microsoft Teams notification: %v\n", err)
+			fmt.Fprintf(stderr, "Warning: failed to dispatch Microsoft Teams notification: %v\n", err)
 		}
 	}
 
@@ -388,14 +389,16 @@ func runCLI(cfg *config.Config) {
 	if thresholdBreached {
 		sym := report.Metadata.CurrencySymbol()
 		if report.Totals.UnblendedCost > cfg.Budget.FailOnThreshold {
-			fmt.Fprintf(os.Stderr, "\n[BUDGET ALERT] Total cost (%s%.2f %s) exceeds configured threshold (%s%.2f %s)!\n",
+			fmt.Fprintf(stderr, "\n[BUDGET ALERT] Total cost (%s%.2f %s) exceeds configured threshold (%s%.2f %s)!\n",
 				sym, report.Totals.UnblendedCost, report.Metadata.Currency, sym, cfg.Budget.FailOnThreshold, report.Metadata.Currency)
 		} else if report.Forecast != nil && report.Forecast.ThresholdBreached {
-			fmt.Fprintf(os.Stderr, "\n[BUDGET ALERT] Projected month-end spend (%s%.2f %s) is on track to breach configured threshold (%s%.2f %s)!\n",
+			fmt.Fprintf(stderr, "\n[BUDGET ALERT] Projected month-end spend (%s%.2f %s) is on track to breach configured threshold (%s%.2f %s)!\n",
 				sym, report.Forecast.TotalAmount, report.Metadata.Currency, sym, cfg.Budget.FailOnThreshold, report.Metadata.Currency)
 		}
-		os.Exit(1)
+		return 1
 	}
+
+	return 0
 }
 
 func saveOutputFile(ctx context.Context, client *awsclient.Client, pathOrURI string, data []byte, mock bool) error {
@@ -486,7 +489,7 @@ func (c *reportCache) Set(key string, report *awsclient.CostReport) {
 	}
 }
 
-func runServer(cfg *config.Config) {
+func runServer(cfg *config.Config, stopCh ...chan os.Signal) {
 	port := cfg.Server.Port
 	if port <= 0 {
 		port = 8080
@@ -495,7 +498,42 @@ func runServer(cfg *config.Config) {
 	addr := fmt.Sprintf("%s:%d", host, port)
 
 	cache := newReportCache(15 * time.Minute)
+	mux := buildServerMux(cfg, cache)
 
+	server := &http.Server{
+		Addr:         addr,
+		Handler:      mux,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 15 * time.Second,
+	}
+
+	var stop chan os.Signal
+	if len(stopCh) > 0 && stopCh[0] != nil {
+		stop = stopCh[0]
+	} else {
+		stop = make(chan os.Signal, 1)
+		signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	}
+
+	go func() {
+		log.Printf("Starting aws-cost-report service on %s", addr)
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Printf("Server stopped: %v", err)
+		}
+	}()
+
+	<-stop
+	log.Println("Shutting down server gracefully...")
+
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancel()
+
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		log.Printf("Graceful shutdown error: %v", err)
+	}
+}
+
+func buildServerMux(cfg *config.Config, cache *reportCache) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -751,41 +789,16 @@ func runServer(cfg *config.Config) {
 		}
 	})
 
-	server := &http.Server{
-		Addr:         addr,
-		Handler:      mux,
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 15 * time.Second,
-	}
-
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
-
-	go func() {
-		log.Printf("Starting aws-cost-report service on %s", addr)
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Server error: %v", err)
-		}
-	}()
-
-	<-stop
-	log.Println("Shutting down server gracefully...")
-
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer shutdownCancel()
-
-	if err := server.Shutdown(shutdownCtx); err != nil {
-		log.Printf("Graceful shutdown error: %v", err)
-	}
+	return mux
 }
 
-func printCredentialHelp(err error) {
-	fmt.Fprintf(os.Stderr, "Error: %v\n\n", err)
-	fmt.Fprintln(os.Stderr, "AWS Credential Resolution Order:")
-	fmt.Fprintln(os.Stderr, "  1. Environment variables (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN)")
-	fmt.Fprintln(os.Stderr, "  2. Shared credentials/config file (~/.aws/credentials, ~/.aws/config, AWS_PROFILE)")
-	fmt.Fprintln(os.Stderr, "  3. IAM Identity Center (AWS SSO token cache)")
-	fmt.Fprintln(os.Stderr, "  4. Web Identity / OIDC token (AWS_ROLE_ARN and AWS_WEB_IDENTITY_TOKEN_FILE in CI)")
-	fmt.Fprintln(os.Stderr, "  5. Amazon ECS / EC2 Instance Metadata Service (IMDSv2)")
-	fmt.Fprintln(os.Stderr, "\nTip: Run with --mock to test output rendering and budget alerts with simulated billing data.")
+func printCredentialHelp(w io.Writer, err error) {
+	fmt.Fprintf(w, "Error: %v\n\n", err)
+	fmt.Fprintln(w, "AWS Credential Resolution Order:")
+	fmt.Fprintln(w, "  1. Environment variables (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN)")
+	fmt.Fprintln(w, "  2. Shared credentials/config file (~/.aws/credentials, ~/.aws/config, AWS_PROFILE)")
+	fmt.Fprintln(w, "  3. IAM Identity Center (AWS SSO token cache)")
+	fmt.Fprintln(w, "  4. Web Identity / OIDC token (AWS_ROLE_ARN and AWS_WEB_IDENTITY_TOKEN_FILE in CI)")
+	fmt.Fprintln(w, "  5. Amazon ECS / EC2 Instance Metadata Service (IMDSv2)")
+	fmt.Fprintln(w, "\nTip: Run with --mock to test output rendering and budget alerts with simulated billing data.")
 }
