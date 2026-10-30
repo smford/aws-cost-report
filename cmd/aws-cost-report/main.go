@@ -438,7 +438,9 @@ func saveOutputFile(ctx context.Context, client *awsclient.Client, pathOrURI str
 
 	dir := filepath.Dir(pathOrURI)
 	if dir != "" && dir != "." {
-		_ = os.MkdirAll(dir, 0755)
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return fmt.Errorf("failed to create directory %s: %w", dir, err)
+		}
 	}
 	return os.WriteFile(pathOrURI, data, 0644)
 }

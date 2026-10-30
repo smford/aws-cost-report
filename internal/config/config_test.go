@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -619,5 +620,90 @@ func TestConfigChargeTypeAndExcludeCredits(t *testing.T) {
 	}
 	if len(cfg3.ChargeTypes) != 1 || cfg3.ChargeTypes[0] != "Credit" {
 		t.Errorf("expected [Credit], got %+v", cfg3.ChargeTypes)
+	}
+}
+
+func TestConfigValidation(t *testing.T) {
+	tests := []struct {
+		name        string
+		args        []string
+		expectError string
+	}{
+		{
+			name:        "invalid format",
+			args:        []string{"--format", "xml"},
+			expectError: "invalid format",
+		},
+		{
+			name:        "invalid granularity",
+			args:        []string{"--granularity", "HOURLY"},
+			expectError: "invalid granularity",
+		},
+		{
+			name:        "negative months",
+			args:        []string{"--months", "-1"},
+			expectError: "months back cannot be negative",
+		},
+		{
+			name:        "negative top",
+			args:        []string{"--top", "-5"},
+			expectError: "top cannot be negative",
+		},
+		{
+			name:        "negative threshold",
+			args:        []string{"--threshold", "-10.0"},
+			expectError: "threshold cannot be negative",
+		},
+		{
+			name:        "negative min-cost",
+			args:        []string{"--min-cost", "-2.5"},
+			expectError: "min-cost cannot be negative",
+		},
+		{
+			name:        "invalid start date",
+			args:        []string{"--start", "not-a-date"},
+			expectError: "invalid start date",
+		},
+		{
+			name:        "invalid end date",
+			args:        []string{"--end", "2026-99-99"},
+			expectError: "invalid end date",
+		},
+		{
+			name:        "start after end date",
+			args:        []string{"--start", "2026-10-15", "--end", "2026-10-01"},
+			expectError: "start date (2026-10-15) must be before or equal to end date (2026-10-01)",
+		},
+		{
+			name:        "invalid group-by dimension",
+			args:        []string{"--group-by", "INVALID_DIM"},
+			expectError: "invalid grouping dimension",
+		},
+		{
+			name:        "valid configuration",
+			args:        []string{"--format", "markdown", "--granularity", "DAILY", "--months", "3", "--top", "5", "--threshold", "100.0", "--min-cost", "0.05", "--start", "2026-09-01", "--end", "2026-10-01", "--group-by", "SERVICE,TAG:Environment"},
+			expectError: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg, err := LoadConfig(tt.args)
+			if tt.expectError != "" {
+				if err == nil {
+					t.Fatalf("expected error containing %q, got nil", tt.expectError)
+				}
+				if !strings.Contains(err.Error(), tt.expectError) {
+					t.Fatalf("expected error containing %q, got %q", tt.expectError, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("unexpected error for valid config: %v", err)
+				}
+				if cfg == nil {
+					t.Fatalf("expected non-nil config")
+				}
+			}
+		})
 	}
 }

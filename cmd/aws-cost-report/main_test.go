@@ -671,6 +671,13 @@ func TestRunCommandEntrypoints(t *testing.T) {
 			inStderr:     true,
 		},
 		{
+			name:         "generate with invalid format flag fails validation",
+			args:         []string{"generate", "--format=xml"},
+			expectedCode: 1,
+			containsText: "invalid format",
+			inStderr:     true,
+		},
+		{
 			name:         "services command without mock fails gracefully without AWS auth",
 			args:         []string{"services"},
 			expectedCode: 1,

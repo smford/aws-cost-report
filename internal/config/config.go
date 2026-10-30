@@ -6,6 +6,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -357,7 +358,7 @@ func LoadConfig(args []string) (*Config, error) {
 		cfg.Defaults.Currency = strings.ToUpper(strings.TrimSpace(*currencyFlag))
 		cfg.CurrencyExplicitlySet = true
 	}
-	if *months > 0 {
+	if *months != 0 {
 		cfg.Defaults.MonthsBack = *months
 	}
 	cfg.MonthsBack = cfg.Defaults.MonthsBack
@@ -441,11 +442,11 @@ func LoadConfig(args []string) (*Config, error) {
 		cfg.Groupings = []GroupingConfig{cfg.Grouping}
 	}
 
-	if *minCost >= 0.0 {
+	if *minCost != -1.0 {
 		cfg.Defaults.MinDisplayCost = *minCost
 	}
 
-	if *topFlag > 0 {
+	if *topFlag != 0 {
 		cfg.Defaults.Top = *topFlag
 	}
 
@@ -491,7 +492,10 @@ func LoadConfig(args []string) (*Config, error) {
 		cfg.Forecast = true
 	}
 
-	if *dailyFlag || strings.EqualFold(*granFlag, "DAILY") {
+	if *granFlag != "" {
+		cfg.Granularity = *granFlag
+	}
+	if *dailyFlag || strings.EqualFold(cfg.Granularity, "DAILY") {
 		cfg.Daily = true
 		cfg.Granularity = "DAILY"
 	}
@@ -532,11 +536,11 @@ func LoadConfig(args []string) (*Config, error) {
 		cfg.Defaults.MonthsBack = 12
 	}
 
-	if *threshAlias >= 0.0 && *failThresh < 0.0 {
+	if *threshAlias != -1.0 && *failThresh == -1.0 {
 		*failThresh = *threshAlias
 	}
 
-	if *failThresh >= 0.0 {
+	if *failThresh != -1.0 {
 		cfg.Budget.FailOnThreshold = *failThresh
 	}
 
@@ -592,7 +596,93 @@ func LoadConfig(args []string) (*Config, error) {
 		cfg.NoColor = true
 	}
 
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
+
 	return cfg, nil
+}
+
+// Validate performs strict validation on configuration options and returns an error describing any violations.
+func (c *Config) Validate() error {
+	// 1. Format validation
+	if c.Reporting.Format != "" {
+		switch strings.ToLower(c.Reporting.Format) {
+		case "table", "markdown", "md", "html", "json", "csv", "prometheus", "prom":
+			// valid
+		default:
+			return fmt.Errorf("invalid format %q: supported formats are table, markdown, html, json, csv, prometheus", c.Reporting.Format)
+		}
+	}
+
+	// 2. Months validation
+	if c.MonthsBack < 0 {
+		return fmt.Errorf("months back cannot be negative (got %d)", c.MonthsBack)
+	}
+
+	// 3. Top validation
+	if c.Defaults.Top < 0 {
+		return fmt.Errorf("top cannot be negative (got %d)", c.Defaults.Top)
+	}
+
+	// 4. Threshold validation
+	if c.Budget.FailOnThreshold < 0 && c.Budget.FailOnThreshold != -1.0 {
+		return fmt.Errorf("threshold cannot be negative (got %.2f)", c.Budget.FailOnThreshold)
+	}
+
+	// 5. MinDisplayCost validation
+	if c.Defaults.MinDisplayCost < 0 && c.Defaults.MinDisplayCost != -1.0 {
+		return fmt.Errorf("min-cost cannot be negative (got %.2f)", c.Defaults.MinDisplayCost)
+	}
+
+	// 6. Granularity validation
+	if c.Granularity != "" {
+		upper := strings.ToUpper(c.Granularity)
+		if upper != "MONTHLY" && upper != "DAILY" {
+			return fmt.Errorf("invalid granularity %q: must be MONTHLY or DAILY", c.Granularity)
+		}
+	}
+
+	// 7. Date format and ordering validation
+	if c.StartDate != "" {
+		if _, err := time.Parse("2006-01-02", c.StartDate); err != nil {
+			return fmt.Errorf("invalid start date %q: expected YYYY-MM-DD: %w", c.StartDate, err)
+		}
+	}
+	if c.EndDate != "" {
+		if _, err := time.Parse("2006-01-02", c.EndDate); err != nil {
+			return fmt.Errorf("invalid end date %q: expected YYYY-MM-DD: %w", c.EndDate, err)
+		}
+	}
+	if c.StartDate != "" && c.EndDate != "" {
+		s, _ := time.Parse("2006-01-02", c.StartDate)
+		e, _ := time.Parse("2006-01-02", c.EndDate)
+		if e.Before(s) {
+			return fmt.Errorf("start date (%s) must be before or equal to end date (%s)", c.StartDate, c.EndDate)
+		}
+	}
+
+	// 8. Grouping dimension validation
+	if len(c.Groupings) > 2 {
+		return fmt.Errorf("AWS Cost Explorer supports a maximum of 2 group-by dimensions, received %d", len(c.Groupings))
+	}
+	for _, g := range c.Groupings {
+		if g.Type == "TAG" {
+			if strings.TrimSpace(g.Key) == "" {
+				return fmt.Errorf("tag grouping key cannot be empty")
+			}
+		} else {
+			upperKey := strings.ToUpper(strings.TrimSpace(g.Key))
+			switch upperKey {
+			case "SERVICE", "LINKED_ACCOUNT", "REGION", "RECORD_TYPE":
+				// valid
+			default:
+				return fmt.Errorf("invalid grouping dimension %q: supported dimensions are SERVICE, LINKED_ACCOUNT, REGION, RECORD_TYPE, or TAG:<Key>", g.Key)
+			}
+		}
+	}
+
+	return nil
 }
 
 func normalizeChargeType(s string) string {
