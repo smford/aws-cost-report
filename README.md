@@ -372,9 +372,12 @@ echo $? # Returns 1 if total cost > $50.00, or 0 if within budget
 aws-cost-report generate --forecast --threshold=50.00
 ```
 
-### 15. Export to JSON or CSV
+### 15. Export to HTML, JSON, or CSV
 
 ```bash
+# Standalone, interactive HTML report with responsive dark/light dashboard
+aws-cost-report generate --format=html -o cost-report.html
+
 # JSON output for jq or downstream processing
 aws-cost-report generate --format=json > monthly-costs.json
 
@@ -382,7 +385,21 @@ aws-cost-report generate --format=json > monthly-costs.json
 aws-cost-report generate --format=csv > monthly-costs.csv
 ```
 
-### 16. Multi-Currency Support (Auto-Detected & Configurable)
+### 16. Webhooks & ChatOps (Slack, Microsoft Teams, Generic HTTP)
+Automate spending visibility and budget alerts across your alerting channels:
+
+```bash
+# Post rich Block Kit cards to Slack
+aws-cost-report generate --slack-webhook="https://hooks.slack.com/services/..."
+
+# Post MessageCard alerts to Microsoft Teams
+aws-cost-report generate --teams-webhook="https://outlook.office.com/webhook/..."
+
+# Post structured JSON payload to any generic HTTP/HTTPS webhook
+aws-cost-report generate --webhook-url="https://api.example.com/webhooks/finops"
+```
+
+### 17. Multi-Currency Support (Auto-Detected & Configurable)
 `aws-cost-report` automatically detects your AWS account's billing currency (`EUR`, `GBP`, `JPY`, `AUD`, `CAD`, `USD`, etc.) from the AWS Cost Explorer API response and dynamically renders the corresponding symbols (`€`, `£`, `¥`, `A$`, `CA$`, `$`) and headers (`Diff (€)`, `Delta (£)`).
 
 You can also explicitly set or override the currency:
@@ -395,7 +412,7 @@ aws-cost-report generate --currency=EUR
 aws-cost-report generate --currency=GBP --compare
 ```
 
-### 17. Shell Autocompletion (`completion`)
+### 18. Shell Autocompletion (`completion`)
 Generate command and flag autocompletion scripts for your shell:
 
 ```bash
@@ -409,7 +426,7 @@ source <(aws-cost-report completion zsh)
 aws-cost-report completion fish | source
 ```
 
-### 18. Save Reports Directly to Amazon S3
+### 19. Save Reports Directly to Amazon S3
 Export reports and JSON summaries straight to Amazon S3 buckets using `s3://` URIs or the dedicated `--s3-bucket` and `--s3-key` flags:
 
 ```bash
@@ -425,7 +442,7 @@ aws-cost-report generate --compare \
 aws-cost-report generate --output="report.csv" --format=csv --s3-bucket="my-billing-reports" --s3-key="csv/2026-10.csv"
 ```
 
-### 19. Enterprise Discount Program (EDP) & Net Cost Metrics
+### 20. Enterprise Discount Program (EDP) & Net Cost Metrics
 For AWS accounts with negotiated Enterprise Discount Programs (EDP) or private pricing agreements, `aws-cost-report` supports AWS Cost Explorer net metrics (`NetUnblendedCost` and `NetAmortizedCost`):
 
 ```bash
@@ -436,7 +453,7 @@ aws-cost-report generate --compare --metrics="UnblendedCost,NetUnblendedCost,Net
 aws-cost-report generate --compare --metrics=all
 ```
 
-### 20. Charge Type Filtering & Excluding Credits (`--charge-type`, `--exclude-credits`)
+### 21. Charge Type Filtering & Excluding Credits (`--charge-type`, `--exclude-credits`)
 Filter AWS line items by charge/record type or exclude promotional credits and refunds from Month-over-Month calculations:
 
 ```bash
@@ -513,6 +530,7 @@ jobs:
 | `top` | Limit breakdown to top N cost drivers and aggregate remainder into "Other" | `""` | No |
 | `slack-webhook` | Incoming Slack webhook URL for automated ChatOps notifications | `""` | No |
 | `teams-webhook` | Incoming Microsoft Teams webhook URL for automated ChatOps notifications | `""` | No |
+| `webhook-url` | Generic HTTP/HTTPS webhook URL for automated JSON cost report dispatch | `""` | No |
 | `write-summary` | Automatically publish markdown table to `$GITHUB_STEP_SUMMARY` | `true` | No |
 | `mock` | Run with offline deterministic mock data (no AWS API calls) | `false` | No |
 | `config` | Path to custom YAML configuration file | `""` | No |
@@ -725,7 +743,7 @@ To run `aws-cost-report`, the executing IAM principal requires read permissions 
 | `--granularity` | | `MONTHLY` | Spend granularity: `MONTHLY` (default) or `DAILY` |
 | `--forecast` | | `false` | Query AWS Cost Explorer machine learning forecast for projected month-end spend |
 | `--monthly` | `--trend` | `false` | Display multi-month historical breakdown with each month as a separate column (default: 12 months) |
-| `--format` | | `table` | Output format: `table`, `markdown`, `json`, `csv`, `prometheus` |
+| `--format` | | `table` | Output format: `table`, `markdown`, `html`, `json`, `csv`, `prometheus` |
 | `--filter` | `--service` | | Filter services by official name (`Amazon DynamoDB`), alias (`S3`, `EC2`), or substring |
 | `--tag` | `--tag-filter` | | Filter costs by AWS Cost Allocation Tag (e.g. `Environment=Production` or `Team=Core,API`) |
 | `--top` | | `0` | Show top N highest cost items and aggregate remainder into "Other Services" |
@@ -743,6 +761,7 @@ To run `aws-cost-report`, the executing IAM principal requires read permissions 
 | `--s3-key` | | | Optional S3 object key prefix/path for output upload |
 | `--slack-webhook` | | | Incoming Slack webhook URL to post formatted Block Kit report |
 | `--teams-webhook` | | | Incoming Microsoft Teams webhook URL to post formatted MessageCard report |
+| `--webhook-url` | | | Generic HTTP/HTTPS webhook URL to post formatted cost report JSON payload |
 | `--no-color` | | `false` | Disable ANSI color codes in table deltas (also honors `NO_COLOR=1`) |
 | `--mock` | | `false` | Run in offline mode with simulated AWS billing data |
 | `--config` | `-c` | `config.yaml` | Path to YAML configuration file |

@@ -59,7 +59,7 @@ GENERATE FLAGS:
   --current-month         Alias for --mtd
   --monthly               Display multi-month historical breakdown with each month as a separate column (default: 12 months)
   --trend                 Alias for --monthly
-  --format <string>       Output format: table (default), markdown, json, csv, prometheus
+  --format <string>       Output format: table (default), markdown, html, json, csv, prometheus
   --months <int>          Number of historical complete months back to query (default: 1)
   --start <YYYY-MM-DD>    Explicit billing start date (inclusive)
   --end <YYYY-MM-DD>      Explicit billing end date (inclusive)
@@ -80,6 +80,7 @@ GENERATE FLAGS:
   --json-summary <path>   Write machine-readable summary metrics to JSON file (supports local path or s3://)
   --slack-webhook <url>   Post formatted Block Kit report to incoming Slack webhook
   --teams-webhook <url>   Post formatted MessageCard report to incoming Microsoft Teams webhook
+  --webhook-url <url>     Post formatted cost report JSON payload to generic HTTP/HTTPS webhook
   --currency <code>       Override currency code and symbol (e.g. USD, EUR, GBP). Auto-detected by default
   --no-color              Disable ANSI colors in terminal tables (honors NO_COLOR=1)
   --mock                  Run in offline mode with simulated AWS billing data
@@ -278,6 +279,11 @@ func runCLI(cfg *config.Config, stdout, stderr io.Writer) int {
 			fmt.Fprintf(stderr, "Error rendering markdown: %v\n", err)
 			return 1
 		}
+	case "html":
+		if err := renderer.RenderHTML(outWriter, report, cfg.Budget.FailOnThreshold); err != nil {
+			fmt.Fprintf(stderr, "Error rendering HTML: %v\n", err)
+			return 1
+		}
 	case "json":
 		if err := renderer.RenderJSON(outWriter, report); err != nil {
 			fmt.Fprintf(stderr, "Error rendering JSON: %v\n", err)
@@ -313,6 +319,8 @@ func runCLI(cfg *config.Config, stdout, stderr io.Writer) int {
 			switch cfg.Reporting.Format {
 			case "markdown", "md":
 				ext = ".md"
+			case "html":
+				ext = ".html"
 			case "json":
 				ext = ".json"
 			case "csv":
@@ -382,6 +390,13 @@ func runCLI(cfg *config.Config, stdout, stderr io.Writer) int {
 	if cfg.TeamsWebhook != "" {
 		if err := webhook.SendTeamsNotification(ctx, cfg.TeamsWebhook, report, cfg.Budget.FailOnThreshold); err != nil {
 			fmt.Fprintf(stderr, "Warning: failed to dispatch Microsoft Teams notification: %v\n", err)
+		}
+	}
+
+	// Dispatch generic webhook notification if configured
+	if cfg.WebhookURL != "" {
+		if err := webhook.SendGenericWebhook(ctx, cfg.WebhookURL, report, cfg.Budget.FailOnThreshold); err != nil {
+			fmt.Fprintf(stderr, "Warning: failed to dispatch webhook: %v\n", err)
 		}
 	}
 
@@ -774,6 +789,9 @@ func buildServerMux(cfg *config.Config, cache *reportCache) *http.ServeMux {
 		case "markdown", "md":
 			w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
 			_ = renderer.RenderMarkdown(w, report, false, 0.00)
+		case "html":
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			_ = renderer.RenderHTML(w, report, reqCfg.Budget.FailOnThreshold)
 		case "table":
 			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 			_ = renderer.RenderTable(w, report, true)

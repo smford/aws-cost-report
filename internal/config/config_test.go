@@ -363,6 +363,45 @@ teams_webhook: "https://outlook.office.com/webhook/yaml"
 	}
 }
 
+func TestGenericWebhookConfig(t *testing.T) {
+	// Flag
+	cfg, err := LoadConfig([]string{"--webhook-url", "https://api.example.com/webhook/costs"})
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+	if cfg.WebhookURL != "https://api.example.com/webhook/costs" {
+		t.Errorf("expected WebhookURL from flag, got %s", cfg.WebhookURL)
+	}
+
+	// YAML
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "generic-webhook.yaml")
+	yamlContent := `
+version: "1"
+webhook_url: "https://api.example.com/webhook/yaml"
+`
+	if err := os.WriteFile(configPath, []byte(yamlContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+	cfg2, err := LoadConfig([]string{"--config", configPath})
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+	if cfg2.WebhookURL != "https://api.example.com/webhook/yaml" {
+		t.Errorf("expected WebhookURL from YAML, got %s", cfg2.WebhookURL)
+	}
+
+	// Environment variable fallback
+	t.Setenv("WEBHOOK_URL", "https://api.example.com/webhook/env")
+	cfg3, err := LoadConfig([]string{})
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+	if cfg3.WebhookURL != "https://api.example.com/webhook/env" {
+		t.Errorf("expected WebhookURL from env, got %s", cfg3.WebhookURL)
+	}
+}
+
 func TestS3ConfigAndFlags(t *testing.T) {
 	// Flags
 	cfg, err := LoadConfig([]string{

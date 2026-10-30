@@ -140,6 +140,7 @@ type Config struct {
 	AccountNameAlias string            `yaml:"account_name"`
 	SlackWebhook     string            `yaml:"slack_webhook"`
 	TeamsWebhook     string            `yaml:"teams_webhook"`
+	WebhookURL       string            `yaml:"webhook_url"`
 	S3Bucket         string            `yaml:"s3_bucket"`
 	S3Key            string            `yaml:"s3_key"`
 	Monthly          bool              `yaml:"monthly"`
@@ -273,6 +274,7 @@ func LoadConfig(args []string) (*Config, error) {
 		topFlag            = fs.Int("top", 0, "Show top N highest cost items and aggregate remainder into Other")
 		slackFlag          = fs.String("slack-webhook", "", "Incoming Slack webhook URL to post formatted cost report")
 		teamsFlag          = fs.String("teams-webhook", "", "Incoming Microsoft Teams webhook URL to post formatted cost report")
+		webhookFlag        = fs.String("webhook-url", "", "Generic HTTP/HTTPS webhook URL to post formatted cost report JSON")
 		s3BucketFlag       = fs.String("s3-bucket", "", "Optional S3 bucket name to upload cost report")
 		s3KeyFlag          = fs.String("s3-key", "", "Optional S3 object key when using --s3-bucket (e.g. 'reports/cost-report.md')")
 		currencyFlag       = fs.String("currency", "", "Currency code (e.g. USD, EUR, GBP) to override auto-detected AWS billing currency")
@@ -453,6 +455,13 @@ func LoadConfig(args []string) (*Config, error) {
 
 	if *teamsFlag != "" {
 		cfg.TeamsWebhook = *teamsFlag
+	}
+
+	if *webhookFlag != "" {
+		cfg.WebhookURL = *webhookFlag
+	}
+	if cfg.WebhookURL == "" {
+		cfg.WebhookURL = os.Getenv("WEBHOOK_URL")
 	}
 
 	if *s3BucketFlag != "" {

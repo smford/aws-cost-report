@@ -15,7 +15,7 @@ inputs:
     required: false
     default: 'true'
   format:
-    description: 'Report output format (markdown, table, json, csv)'
+    description: 'Report output format (markdown, table, html, json, csv)'
     required: false
     default: 'markdown'
   months:
@@ -88,6 +88,10 @@ inputs:
     default: ''
   teams-webhook:
     description: 'Incoming Microsoft Teams webhook URL to post formatted cost report'
+    required: false
+    default: ''
+  webhook-url:
+    description: 'Generic HTTP/HTTPS webhook URL to post formatted cost report JSON'
     required: false
     default: ''
   write-summary:
@@ -308,6 +312,10 @@ runs:
 
         if [ -n "${{ inputs.teams-webhook }}" ]; then
           ARGS+=("--teams-webhook=${{ inputs.teams-webhook }}")
+        fi
+
+        if [ -n "${{ inputs.webhook-url }}" ]; then
+          ARGS+=("--webhook-url=${{ inputs.webhook-url }}")
         fi
 
         if [ -n "${{ inputs.s3-bucket }}" ]; then

@@ -37,7 +37,7 @@ _aws_cost_report() {
     _init_completion || return
 
     local commands="generate services server completion version help"
-    local flags="--compare --mtd --current-month --daily --granularity --forecast --monthly --trend --format --months --start --end --metrics --group-by --name --account-name --filter --service --tag --tag-filter --exclude-credits --charge-type --record-type --threshold --fail-on-threshold --top --min-cost --slack-webhook --teams-webhook --s3-bucket --s3-key --currency --no-color --mock --config -c --output -o --json-summary --write-summary --version -v --help -h"
+    local flags="--compare --mtd --current-month --daily --granularity --forecast --monthly --trend --format --months --start --end --metrics --group-by --name --account-name --filter --service --tag --tag-filter --exclude-credits --charge-type --record-type --threshold --fail-on-threshold --top --min-cost --slack-webhook --teams-webhook --webhook-url --s3-bucket --s3-key --currency --no-color --mock --config -c --output -o --json-summary --write-summary --version -v --help -h"
 
     case "${prev}" in
         --charge-type|--record-type)
@@ -49,7 +49,7 @@ _aws_cost_report() {
             return 0
             ;;
         --format)
-            COMPREPLY=( $(compgen -W "table markdown json csv prometheus" -- "${cur}") )
+            COMPREPLY=( $(compgen -W "table markdown html json csv prometheus" -- "${cur}") )
             return 0
             ;;
         --group-by)
@@ -124,7 +124,7 @@ _aws_cost_report() {
                         '--forecast[Query AWS Cost Explorer projected month-end spend forecast and guardrail]' \
                         '--monthly[Display multi-month historical breakdown with each month as a separate column]' \
                         '--trend[Alias for --monthly]' \
-                        '--format[Output format]:format:(table markdown json csv prometheus)' \
+                        '--format[Output format]:format:(table markdown html json csv prometheus)' \
                         '--months[Number of historical complete months back to query]:months:' \
                         '--start[Explicit billing start date (inclusive)]:date:' \
                         '--end[Explicit billing end date (inclusive)]:date:' \
@@ -146,6 +146,7 @@ _aws_cost_report() {
                         '--json-summary[Write machine-readable summary metrics to JSON file]:file:_files' \
                         '--slack-webhook[Incoming Slack webhook URL]:url:' \
                         '--teams-webhook[Incoming Microsoft Teams webhook URL]:url:' \
+                        '--webhook-url[Generic HTTP/HTTPS webhook URL]:url:' \
                         '--s3-bucket[S3 bucket name to upload cost report]:bucket:' \
                         '--s3-key[S3 object key for uploaded report]:key:' \
                         '--currency[Override currency code and symbol]:currency:(USD EUR GBP JPY AUD CAD CHF)' \
@@ -191,12 +192,14 @@ complete -c aws-cost-report -l granularity -x -a "MONTHLY DAILY" -d "Spend granu
 complete -c aws-cost-report -l forecast -d "Query AWS Cost Explorer projected month-end spend forecast and guardrail"
 complete -c aws-cost-report -l monthly -d "Display multi-month historical breakdown in column format"
 complete -c aws-cost-report -l trend -d "Alias for --monthly"
-complete -c aws-cost-report -l format -x -a "table markdown json csv prometheus" -d "Output format"
+complete -c aws-cost-report -l format -x -a "table markdown html json csv prometheus" -d "Output format"
 complete -c aws-cost-report -l group-by -x -a "SERVICE LINKED_ACCOUNT" -d "Grouping dimension"
 complete -c aws-cost-report -l currency -x -a "USD EUR GBP JPY AUD CAD CHF" -d "Currency code"
 complete -c aws-cost-report -l exclude-credits -d "Exclude credits and refunds from billing calculations"
 complete -c aws-cost-report -l charge-type -x -a "Usage Credit Refund Tax Upfront Recurring Support Other" -d "Filter costs by charge/record type"
 complete -c aws-cost-report -l record-type -x -a "Usage Credit Refund Tax Upfront Recurring Support Other" -d "Alias for --charge-type"
+complete -c aws-cost-report -l teams-webhook -d "Incoming Microsoft Teams webhook URL"
+complete -c aws-cost-report -l webhook-url -d "Generic HTTP/HTTPS webhook URL"
 complete -c aws-cost-report -l mock -d "Run in offline mode with simulated AWS billing data"
 complete -c aws-cost-report -l no-color -d "Disable ANSI color output in terminal tables"
 complete -c aws-cost-report -l config -s c -r -d "Path to YAML configuration file"

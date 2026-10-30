@@ -590,6 +590,12 @@ func TestRunCommandEntrypoints(t *testing.T) {
 			containsText: "aws_cost_report_total_unblended_dollars",
 		},
 		{
+			name:         "generate mock html",
+			args:         []string{"generate", "--mock", "--format=html"},
+			expectedCode: 0,
+			containsText: "<!DOCTYPE html>",
+		},
+		{
 			name:         "generate mock monthly breakdown",
 			args:         []string{"generate", "--mock", "--monthly"},
 			expectedCode: 0,
@@ -744,6 +750,7 @@ func TestBuildServerMuxEndpoints(t *testing.T) {
 	}{
 		{"json", "application/json"},
 		{"markdown", "text/markdown"},
+		{"html", "text/html"},
 		{"table", "text/plain"},
 		{"csv", "text/csv"},
 		{"prometheus", "text/plain"},
@@ -862,6 +869,7 @@ func TestRunCLIWithWebhooksAndSummary(t *testing.T) {
 	cfg.Reporting.Format = "markdown"
 	cfg.SlackWebhook = ts.URL
 	cfg.TeamsWebhook = ts.URL
+	cfg.WebhookURL = ts.URL
 	cfg.OutputFile = outFile
 	cfg.JSONSummaryFile = jsonFile
 	cfg.S3Bucket = "backup-bucket"
@@ -886,6 +894,7 @@ func TestRunCLIWithWebhooksAndSummary(t *testing.T) {
 	cfgWarn.MockMode = true
 	cfgWarn.SlackWebhook = "http://127.0.0.1:1/invalid"
 	cfgWarn.TeamsWebhook = "http://127.0.0.1:1/invalid"
+	cfgWarn.WebhookURL = "http://127.0.0.1:1/invalid"
 	cfgWarn.OutputFile = "/nonexistent_root_dir/report.md"
 	cfgWarn.JSONSummaryFile = "/nonexistent_root_dir/summary.json"
 	var warnStdout, warnStderr bytes.Buffer
