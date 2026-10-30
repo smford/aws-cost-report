@@ -37,7 +37,7 @@ _aws_cost_report() {
     _init_completion || return
 
     local commands="generate services server completion version help"
-    local flags="--compare --mtd --current-month --daily --granularity --forecast --monthly --trend --format --months --start --end --metrics --group-by --name --account-name --filter --service --tag --tag-filter --exclude-credits --charge-type --record-type --threshold --fail-on-threshold --top --min-cost --slack-webhook --teams-webhook --webhook-url --s3-bucket --s3-key --currency --no-color --mock --config -c --output -o --json-summary --write-summary --version -v --help -h"
+    local flags="--compare --mtd --current-month --daily --granularity --forecast --monthly --trend --format --months --start --end --metrics --group-by --name --account-name --filter --service --tag --tag-filter --exclude-credits --charge-type --record-type --threshold --fail-on-threshold --top --min-cost --slack-webhook --teams-webhook --webhook-url --s3-bucket --s3-key --currency --no-cache --cache-dir --clear-cache --no-color --mock --config -c --output -o --json-summary --write-summary --version -v --help -h"
 
     case "${prev}" in
         --charge-type|--record-type)
@@ -150,6 +150,9 @@ _aws_cost_report() {
                         '--s3-bucket[S3 bucket name to upload cost report]:bucket:' \
                         '--s3-key[S3 object key for uploaded report]:key:' \
                         '--currency[Override currency code and symbol]:currency:(USD EUR GBP JPY AUD CAD CHF)' \
+                        '--no-cache[Disable local query response caching]' \
+                        '--cache-dir[Custom directory to store local query cache files]:dir:_files -/' \
+                        '--clear-cache[Purge local query response cache files and exit]' \
                         '--no-color[Disable ANSI colors in terminal tables]' \
                         '--mock[Run in offline mode with simulated AWS billing data]' \
                         '--config[Path to YAML configuration file]:file:_files' \
@@ -200,6 +203,9 @@ complete -c aws-cost-report -l charge-type -x -a "Usage Credit Refund Tax Upfron
 complete -c aws-cost-report -l record-type -x -a "Usage Credit Refund Tax Upfront Recurring Support Other" -d "Alias for --charge-type"
 complete -c aws-cost-report -l teams-webhook -d "Incoming Microsoft Teams webhook URL"
 complete -c aws-cost-report -l webhook-url -d "Generic HTTP/HTTPS webhook URL"
+complete -c aws-cost-report -l no-cache -d "Disable local query response caching"
+complete -c aws-cost-report -l cache-dir -r -d "Custom directory to store local query cache files"
+complete -c aws-cost-report -l clear-cache -d "Purge local query response cache files and exit"
 complete -c aws-cost-report -l mock -d "Run in offline mode with simulated AWS billing data"
 complete -c aws-cost-report -l no-color -d "Disable ANSI color output in terminal tables"
 complete -c aws-cost-report -l config -s c -r -d "Path to YAML configuration file"

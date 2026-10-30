@@ -137,6 +137,15 @@ func (c *Client) GenerateReport(ctx context.Context, cfg *config.Config, now tim
 		return nil, fmt.Errorf("failed to resolve time period: %w", err)
 	}
 
+	cacheDir := cfg.CacheDir
+	var cacheKey string
+	if cacheDir != "" && !cfg.NoCache {
+		cacheKey = ComputeCacheKey(accountID, cfg, dateRange.Start.Format(DateFormat), dateRange.EndExclusiveAWS.Format(DateFormat))
+		if cachedReport, hit, err := GetCachedReport(cacheDir, cacheKey); err == nil && hit && cachedReport != nil {
+			return cachedReport, nil
+		}
+	}
+
 	// 3. Fetch period costs (concurrently if comparison is enabled)
 	var (
 		currentTotals    TotalCosts
@@ -400,6 +409,14 @@ func (c *Client) GenerateReport(ctx context.Context, cfg *config.Config, now tim
 			return nil, err
 		}
 		report.Forecast = forecast
+	}
+
+	if cacheDir != "" && !cfg.NoCache && cacheKey != "" {
+		ttl := 24 * time.Hour
+		if dateRange.IsEstimated || dateRange.IsMTD {
+			ttl = 2 * time.Hour
+		}
+		_ = SaveCachedReport(cacheDir, cacheKey, report, ttl)
 	}
 
 	return report, nil

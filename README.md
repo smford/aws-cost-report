@@ -533,6 +533,7 @@ jobs:
 | `webhook-url` | Generic HTTP/HTTPS webhook URL for automated JSON cost report dispatch | `""` | No |
 | `write-summary` | Automatically publish markdown table to `$GITHUB_STEP_SUMMARY` | `true` | No |
 | `mock` | Run with offline deterministic mock data (no AWS API calls) | `false` | No |
+| `no-cache` | Disable local query response caching (`true`/`false`) | `false` | No |
 | `config` | Path to custom YAML configuration file | `""` | No |
 | `currency` | Override currency code and symbol (e.g. `USD`, `EUR`, `GBP`). Auto-detected from AWS by default. | `""` | No |
 | `monthly` | Render multi-month historical breakdown in column format (`true`/`false`) | `false` | No |
@@ -763,6 +764,9 @@ To run `aws-cost-report`, the executing IAM principal requires read permissions 
 | `--teams-webhook` | | | Incoming Microsoft Teams webhook URL to post formatted MessageCard report |
 | `--webhook-url` | | | Generic HTTP/HTTPS webhook URL to post formatted cost report JSON payload |
 | `--no-color` | | `false` | Disable ANSI color codes in table deltas (also honors `NO_COLOR=1`) |
+| `--no-cache` | | `false` | Disable local query response disk caching |
+| `--cache-dir` | | | Custom local query response cache directory path (defaults to user cache dir) |
+| `--clear-cache` | | | Purge all locally cached query results from disk and exit |
 | `--mock` | | `false` | Run in offline mode with simulated AWS billing data |
 | `--config` | `-c` | `config.yaml` | Path to YAML configuration file |
 | `--version` | `-v` | | Display version metadata and license |

@@ -166,6 +166,9 @@ type Config struct {
 	ChargeTypes           []string     `yaml:"charge_types"`
 	ExcludeCredits        bool         `yaml:"exclude_credits"`
 	NoColor               bool         `yaml:"no_color"`
+	NoCache               bool         `yaml:"no_cache"`
+	CacheDir              string       `yaml:"cache_dir"`
+	ClearCache            bool         `yaml:"-"`
 	OutputFile            string       `yaml:"output_file"`
 	JSONSummaryFile       string       `yaml:"json_summary_file"`
 	CurrencyExplicitlySet bool         `yaml:"-"`
@@ -269,6 +272,9 @@ func LoadConfig(args []string) (*Config, error) {
 		filterFlag         = fs.String("filter", "", "Filter services by comma-separated substring (e.g. DynamoDB,Lambda)")
 		serviceFlag        = fs.String("service", "", "Alias for --filter")
 		noColorFlag        = fs.Bool("no-color", false, "Disable ANSI color output in terminal tables")
+		noCacheFlag        = fs.Bool("no-cache", false, "Disable local query response caching")
+		cacheDirFlag       = fs.String("cache-dir", "", "Custom directory to store local query cache files")
+		clearCacheFlag     = fs.Bool("clear-cache", false, "Purge local query response cache files and exit")
 		outputFlag         = fs.String("output", "", "Optional file path to write report output")
 		outputSh           = fs.String("o", "", "Optional file path to write report output (shorthand)")
 		jsonSumFlag        = fs.String("json-summary", "", "Optional file path to write machine-readable summary JSON")
@@ -594,6 +600,16 @@ func LoadConfig(args []string) (*Config, error) {
 
 	if *noColorFlag || os.Getenv("NO_COLOR") != "" || os.Getenv("TERM") == "dumb" {
 		cfg.NoColor = true
+	}
+
+	if *noCacheFlag || os.Getenv("AWS_COST_REPORT_NO_CACHE") == "1" || os.Getenv("AWS_COST_REPORT_NO_CACHE") == "true" {
+		cfg.NoCache = true
+	}
+	if *cacheDirFlag != "" {
+		cfg.CacheDir = *cacheDirFlag
+	}
+	if *clearCacheFlag {
+		cfg.ClearCache = true
 	}
 
 	if err := cfg.Validate(); err != nil {

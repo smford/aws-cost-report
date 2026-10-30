@@ -82,6 +82,9 @@ GENERATE FLAGS:
   --teams-webhook <url>   Post formatted MessageCard report to incoming Microsoft Teams webhook
   --webhook-url <url>     Post formatted cost report JSON payload to generic HTTP/HTTPS webhook
   --currency <code>       Override currency code and symbol (e.g. USD, EUR, GBP). Auto-detected by default
+  --no-cache              Disable local query response caching
+  --cache-dir <dir>       Custom local cache directory path (defaults to user cache dir)
+  --clear-cache           Purge local query response cache files and exit
   --no-color              Disable ANSI colors in terminal tables (honors NO_COLOR=1)
   --mock                  Run in offline mode with simulated AWS billing data
   --config, -c <path>     Path to YAML configuration file (default: config.yaml)
@@ -201,6 +204,20 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return 0
 	}
 
+	if cfg.ClearCache {
+		dir := cfg.CacheDir
+		if dir == "" {
+			dir = awsclient.DefaultCacheDir()
+		}
+		count, err := awsclient.ClearCache(dir)
+		if err != nil {
+			fmt.Fprintf(stderr, "Error clearing cache directory %s: %v\n", dir, err)
+			return 1
+		}
+		fmt.Fprintf(stdout, "Successfully purged %d cached report(s) from %s\n", count, dir)
+		return 0
+	}
+
 	if cmd == "server" || cfg.RunServer {
 		runServer(cfg)
 		return 0
@@ -208,6 +225,10 @@ func Run(args []string, stdout, stderr io.Writer) int {
 
 	if cmd == "services" || cfg.ListServices {
 		return runListServices(cfg, stdout, stderr)
+	}
+
+	if !cfg.NoCache && cfg.CacheDir == "" {
+		cfg.CacheDir = awsclient.DefaultCacheDir()
 	}
 
 	return runCLI(cfg, stdout, stderr)

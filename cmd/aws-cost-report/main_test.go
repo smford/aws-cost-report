@@ -678,6 +678,18 @@ func TestRunCommandEntrypoints(t *testing.T) {
 			inStderr:     true,
 		},
 		{
+			name:         "clear-cache flag execution",
+			args:         []string{"--clear-cache"},
+			expectedCode: 0,
+			containsText: "Successfully purged",
+		},
+		{
+			name:         "generate mock with no-cache flag",
+			args:         []string{"generate", "--mock", "--no-cache"},
+			expectedCode: 0,
+			containsText: "AWS MONTHLY BILLING & USAGE REPORT",
+		},
+		{
 			name:         "services command without mock fails gracefully without AWS auth",
 			args:         []string{"services"},
 			expectedCode: 1,
