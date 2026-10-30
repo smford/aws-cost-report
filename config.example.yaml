@@ -28,8 +28,9 @@ accounts:
   "123456789012": "Production Core"
   "987654321098": "Staging / QA"
 
-# Optional Slack webhook integration for ChatOps
-slack_webhook: ""
+# Optional webhook integrations (supports environment variable expansion: ${SLACK_WEBHOOK_URL:-})
+slack_webhook: "${SLACK_WEBHOOK_URL:-}"
+teams_webhook: "${TEAMS_WEBHOOK_URL:-}"
 
 # Optional service filters: official AWS Cost Explorer names ("Amazon DynamoDB"), common aliases ("S3", "EC2"), or substrings
 filters: []

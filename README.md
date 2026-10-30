@@ -620,12 +620,12 @@ accounts:
   "123456789012": "Production Core"
   "987654321098": "Staging / QA"
 
-# Optional incoming ChatOps webhooks for automated notifications
-slack_webhook: ""
-teams_webhook: ""
+# Optional incoming ChatOps webhooks (supports environment variable expansion)
+slack_webhook: "${SLACK_WEBHOOK_URL:-}"
+teams_webhook: "${TEAMS_WEBHOOK_URL:-}"
 ```
 
-*Note: Command-line flags always take precedence over values in `config.yaml`.*
+*Note: Environment variables in `${VAR}` or `${VAR:-default}` syntax are automatically expanded when loading `config.yaml`. Command-line flags always take highest precedence.*
 
 ---
 

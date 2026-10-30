@@ -319,11 +319,12 @@ func LoadConfig(args []string) (*Config, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to read config file %q: %w", selectedConfig, err)
 		}
-		if err := yaml.Unmarshal(data, cfg); err != nil {
+		expanded := []byte(ExpandEnv(string(data)))
+		if err := yaml.Unmarshal(expanded, cfg); err != nil {
 			return nil, fmt.Errorf("failed to parse config YAML: %w", err)
 		}
 		var raw map[string]interface{}
-		if err := yaml.Unmarshal(data, &raw); err == nil {
+		if err := yaml.Unmarshal(expanded, &raw); err == nil {
 			if defs, ok := raw["defaults"].(map[string]interface{}); ok {
 				if _, set := defs["currency"]; set {
 					cfg.CurrencyExplicitlySet = true
@@ -547,4 +548,19 @@ func LoadConfig(args []string) (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+// ExpandEnv replaces ${VAR} or ${VAR:-default} with values from the environment.
+func ExpandEnv(s string) string {
+	return os.Expand(s, func(key string) string {
+		if idx := strings.Index(key, ":-"); idx != -1 {
+			k := key[:idx]
+			def := key[idx+2:]
+			if val, ok := os.LookupEnv(k); ok && val != "" {
+				return val
+			}
+			return def
+		}
+		return os.Getenv(key)
+	})
 }

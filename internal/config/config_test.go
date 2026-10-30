@@ -491,3 +491,65 @@ func TestConfigDaily(t *testing.T) {
 		t.Errorf("expected Daily=true and Granularity=DAILY, got Daily=%v, Granularity=%s", cfg2.Daily, cfg2.Granularity)
 	}
 }
+
+func TestExpandEnv(t *testing.T) {
+	t.Setenv("TEST_REGION", "eu-central-1")
+	t.Setenv("TEST_CURRENCY", "EUR")
+
+	cases := []struct {
+		input    string
+		expected string
+	}{
+		{"${TEST_REGION}", "eu-central-1"},
+		{"$TEST_REGION", "eu-central-1"},
+		{"${TEST_UNSET:-us-east-1}", "us-east-1"},
+		{"${TEST_REGION:-us-west-2}", "eu-central-1"},
+		{"region: ${TEST_REGION}, curr: ${TEST_CURRENCY}", "region: eu-central-1, curr: EUR"},
+		{"no vars", "no vars"},
+	}
+
+	for _, c := range cases {
+		actual := ExpandEnv(c.input)
+		if actual != c.expected {
+			t.Errorf("ExpandEnv(%q) = %q; want %q", c.input, actual, c.expected)
+		}
+	}
+}
+
+func TestConfigFileEnvExpansion(t *testing.T) {
+	t.Setenv("TEST_REPORT_FORMAT", "markdown")
+	t.Setenv("TEST_WEBHOOK_URL", "https://hooks.slack.com/services/TEST/EXPAND")
+
+	yamlContent := `version: "1"
+defaults:
+  currency: ${TEST_CONFIG_CURRENCY:-GBP}
+reporting:
+  format: ${TEST_REPORT_FORMAT}
+slack_webhook: ${TEST_WEBHOOK_URL}
+`
+	tmpFile, err := os.CreateTemp("", "aws-cost-report-test-*.yaml")
+	if err != nil {
+		t.Fatalf("failed to create temp file: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+
+	if _, err := tmpFile.WriteString(yamlContent); err != nil {
+		t.Fatalf("failed to write temp file: %v", err)
+	}
+	tmpFile.Close()
+
+	cfg, err := LoadConfig([]string{"--config", tmpFile.Name()})
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+
+	if cfg.Defaults.Currency != "GBP" {
+		t.Errorf("expected expanded default currency GBP, got %s", cfg.Defaults.Currency)
+	}
+	if cfg.Reporting.Format != "markdown" {
+		t.Errorf("expected expanded format markdown, got %s", cfg.Reporting.Format)
+	}
+	if cfg.SlackWebhook != "https://hooks.slack.com/services/TEST/EXPAND" {
+		t.Errorf("expected expanded Slack webhook URL, got %s", cfg.SlackWebhook)
+	}
+}
