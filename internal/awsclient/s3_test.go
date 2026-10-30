@@ -2,18 +2,24 @@ package awsclient
 
 import (
 	"context"
+	"errors"
 	"io"
 	"testing"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
 type mockS3Client struct {
-	putCalls   int
-	lastBucket string
-	lastKey    string
-	lastBody   string
-	lastType   string
+	putCalls      int
+	headCalls     int
+	lastBucket    string
+	lastKey       string
+	lastBody      string
+	lastType      string
+	lastRegion    string
+	bucketRegions map[string]string
+	putErr        error
 }
 
 func (m *mockS3Client) PutObject(ctx context.Context, params *s3.PutObjectInput, optFns ...func(*s3.Options)) (*s3.PutObjectOutput, error) {
@@ -27,7 +33,27 @@ func (m *mockS3Client) PutObject(ctx context.Context, params *s3.PutObjectInput,
 		data, _ := io.ReadAll(params.Body)
 		m.lastBody = string(data)
 	}
+	var opts s3.Options
+	for _, fn := range optFns {
+		fn(&opts)
+	}
+	m.lastRegion = opts.Region
+
+	if m.putErr != nil {
+		return nil, m.putErr
+	}
 	return &s3.PutObjectOutput{}, nil
+}
+
+func (m *mockS3Client) HeadBucket(ctx context.Context, params *s3.HeadBucketInput, optFns ...func(*s3.Options)) (*s3.HeadBucketOutput, error) {
+	m.headCalls++
+	reg := "us-east-1"
+	if m.bucketRegions != nil && m.bucketRegions[*params.Bucket] != "" {
+		reg = m.bucketRegions[*params.Bucket]
+	}
+	return &s3.HeadBucketOutput{
+		BucketRegion: aws.String(reg),
+	}, nil
 }
 
 func TestParseS3URI(t *testing.T) {
@@ -100,5 +126,49 @@ func TestUploadToS3WithMock(t *testing.T) {
 	}
 	if mockS3.lastBody != string(data) {
 		t.Errorf("expected body matching uploaded data")
+	}
+}
+
+func TestUploadToS3MultiRegion(t *testing.T) {
+	mockS3 := &mockS3Client{
+		bucketRegions: map[string]string{
+			"eu-central-bucket": "eu-central-1",
+			"ap-se-bucket":      "ap-southeast-2",
+		},
+	}
+	client := NewClient(nil, nil)
+	client.SetS3Client(mockS3)
+
+	ctx := context.Background()
+
+	// 1. Upload to eu-central-1 bucket
+	err := client.UploadToS3(ctx, "eu-central-bucket", "report.md", []byte("# Central Report"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if mockS3.lastRegion != "eu-central-1" {
+		t.Errorf("expected region eu-central-1, got %q", mockS3.lastRegion)
+	}
+
+	// 2. Upload to ap-southeast-2 bucket
+	err = client.UploadToS3(ctx, "ap-se-bucket", "report.json", []byte("{}"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if mockS3.lastRegion != "ap-southeast-2" {
+		t.Errorf("expected region ap-southeast-2, got %q", mockS3.lastRegion)
+	}
+}
+
+func TestExtractBucketRegionFromError(t *testing.T) {
+	err := errors.New("The authorization header is malformed; expecting 'eu-west-1'")
+	reg := extractBucketRegionFromError(err)
+	if reg != "eu-west-1" {
+		t.Errorf("expected eu-west-1, got %q", reg)
+	}
+
+	errNil := extractBucketRegionFromError(nil)
+	if errNil != "" {
+		t.Errorf("expected empty string for nil error, got %q", errNil)
 	}
 }

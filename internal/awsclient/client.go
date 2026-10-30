@@ -63,16 +63,20 @@ func NewClient(ce CostExplorerAPI, s STSAPI, i ...IAMAPI) *Client {
 
 // NewRealClient initializes authentic AWS SDK v2 clients using the default credential chain.
 func NewRealClient(ctx context.Context) (*Client, error) {
-	// Cost Explorer is a global endpoint hosted in us-east-1
-	cfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion("us-east-1"))
+	// Ambient config respecting user's default AWS_REGION, AWS_PROFILE, or environment
+	ambientCfg, err := awsconfig.LoadDefaultConfig(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load AWS configuration: %w", err)
 	}
 
-	stsClient := sts.NewFromConfig(cfg)
-	ceClient := costexplorer.NewFromConfig(cfg)
-	iamClient := iam.NewFromConfig(cfg)
-	s3Client := s3.NewFromConfig(cfg)
+	stsClient := sts.NewFromConfig(ambientCfg)
+	iamClient := iam.NewFromConfig(ambientCfg)
+	s3Client := s3.NewFromConfig(ambientCfg)
+
+	// Cost Explorer endpoint is global and hosted in us-east-1
+	ceCfg := ambientCfg.Copy()
+	ceCfg.Region = "us-east-1"
+	ceClient := costexplorer.NewFromConfig(ceCfg)
 
 	client := NewClient(ceClient, stsClient, iamClient)
 	client.s3Client = s3Client
