@@ -66,6 +66,22 @@ inputs:
     description: 'Alias for charge-type'
     required: false
     default: ''
+  region:
+    description: 'Filter costs by comma-separated AWS regions (e.g. us-east-1,eu-west-1)'
+    required: false
+    default: ''
+  assume-role-arn:
+    description: 'AWS IAM Role ARN to assume via STS for cross-account cost auditing'
+    required: false
+    default: ''
+  role-to-assume:
+    description: 'Alias for assume-role-arn'
+    required: false
+    default: ''
+  role-session-name:
+    description: 'Optional session name when assuming an IAM role'
+    required: false
+    default: ''
   threshold:
     description: 'Budget alert threshold amount (e.g. 500.00). Alerts in Step Summary and fails step if exceeded.'
     required: false
@@ -360,6 +376,20 @@ runs:
 
         if [ -n "${{ inputs.config }}" ]; then
           ARGS+=("--config=${{ inputs.config }}")
+        fi
+
+        if [ -n "${{ inputs.region }}" ]; then
+          ARGS+=("--region=${{ inputs.region }}")
+        fi
+
+        if [ -n "${{ inputs.assume-role-arn }}" ]; then
+          ARGS+=("--assume-role-arn=${{ inputs.assume-role-arn }}")
+        elif [ -n "${{ inputs.role-to-assume }}" ]; then
+          ARGS+=("--assume-role-arn=${{ inputs.role-to-assume }}")
+        fi
+
+        if [ -n "${{ inputs.role-session-name }}" ]; then
+          ARGS+=("--role-session-name=${{ inputs.role-session-name }}")
         fi
 
         if [ -n "${{ inputs.currency }}" ]; then

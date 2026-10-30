@@ -115,6 +115,31 @@ type CostForecast struct {
 	ThresholdBreached  bool    `json:"threshold_breached,omitempty"`
 }
 
+// AnomalyItem represents a detected unexpected spend anomaly from AWS Cost Anomaly Detection.
+type AnomalyItem struct {
+	ID            string  `json:"id"`
+	StartDate     string  `json:"start_date"`
+	EndDate       string  `json:"end_date"`
+	Dimension     string  `json:"dimension"`
+	Service       string  `json:"service,omitempty"`
+	Region        string  `json:"region,omitempty"`
+	AccountID     string  `json:"account_id,omitempty"`
+	ImpactAmount  float64 `json:"impact_amount"`
+	ActualSpend   float64 `json:"actual_spend,omitempty"`
+	ExpectedSpend float64 `json:"expected_spend,omitempty"`
+}
+
+// AnomalyReport encapsulates anomalous spending events across an account.
+type AnomalyReport struct {
+	AccountID   string        `json:"account_id"`
+	AccountName string        `json:"account_name,omitempty"`
+	Currency    string        `json:"currency"`
+	PeriodStart string        `json:"period_start"`
+	PeriodEnd   string        `json:"period_end"`
+	TotalImpact float64       `json:"total_impact"`
+	Anomalies   []AnomalyItem `json:"anomalies"`
+}
+
 // CostReport is the root domain model containing metadata, totals, and line items.
 type CostReport struct {
 	Metadata         ReportMetadata    `json:"metadata"`

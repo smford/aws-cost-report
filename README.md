@@ -467,6 +467,55 @@ aws-cost-report generate --compare --charge-type="Usage,Tax"
 aws-cost-report generate --compare --charge-type="UpfrontReservationFee"
 ```
 
+### 22. Regional Cost Breakdown & Filtering (`--group-by=REGION`, `--region`)
+Analyze AWS infrastructure spend across geographical regions or isolate specific target regions:
+
+```bash
+# Group and compare total spend by AWS Region
+aws-cost-report generate --compare --group-by=REGION
+
+# Multi-dimensional grouping: Services within each Region
+aws-cost-report generate --compare --group-by=REGION,SERVICE
+
+# Filter cost explorer queries to specific AWS regions
+aws-cost-report generate --compare --region="us-east-1,eu-west-1"
+```
+
+### 23. Cross-Account Role Assumption via AWS STS (`--assume-role-arn`)
+Audit multiple AWS member accounts from a central security/billing account using AWS STS `AssumeRole`:
+
+```bash
+# Assume an IAM role in target AWS member account:
+aws-cost-report generate --compare \
+  --assume-role-arn="arn:aws:iam::123456789012:role/FinOpsCostAuditor" \
+  --role-session-name="cost-report-audit"
+```
+
+### 24. Cost Allocation Tag Discovery (`tags`)
+Inspect active Cost Allocation Tags configured in your AWS account to see what tag keys and values exist:
+
+```bash
+# List all active Cost Allocation Tag keys:
+aws-cost-report tags
+
+# List all active tag values for a specific tag key:
+aws-cost-report tags --tag-key="Environment"
+
+# Export tag keys as machine-readable JSON:
+aws-cost-report tags --format=json
+```
+
+### 25. AWS Cost Anomaly Detection (`anomalies`)
+Identify sudden spend spikes and unexpected cloud billing anomalies detected by AWS machine learning:
+
+```bash
+# Query recent cost anomalies for the billing period:
+aws-cost-report anomalies
+
+# Export anomaly findings to JSON for automated alerting:
+aws-cost-report anomalies --format=json
+```
+
 ---
 
 ## GitHub Action
@@ -524,6 +573,10 @@ jobs:
 | `exclude-credits` | Exclude promotional credits and refunds (`true`/`false`) | `false` | No |
 | `charge-type` | Filter costs by charge/record type (e.g. `Usage,Tax`, `Credit`) | `""` | No |
 | `record-type` | Alias for `charge-type` | `""` | No |
+| `region` | Filter costs by comma-separated AWS regions (e.g. `us-east-1,eu-west-1`) | `""` | No |
+| `assume-role-arn` | AWS IAM Role ARN to assume via STS for cross-account cost auditing | `""` | No |
+| `role-to-assume` | Alias for `assume-role-arn` | `""` | No |
+| `role-session-name` | Optional session name when assuming an IAM role | `""` | No |
 | `threshold` | SRE budget alert dollar threshold (e.g. `500.00`). Exceeding fails the step. | `""` | No |
 | `fail-on-threshold` | Whether to terminate step with failure on threshold breach (`true`/`false`) | `true` | No |
 | `min-cost` | Minimum cost floor to display in itemized breakdown | `""` | No |
@@ -727,6 +780,8 @@ To run `aws-cost-report`, the executing IAM principal requires read permissions 
 |:---|:---|
 | `generate` | Generate monthly billing and usage cost report (default report engine) |
 | `services` | List official AWS Cost Explorer service names available in your account |
+| `tags` | List active AWS Cost Allocation Tag keys or tag values |
+| `anomalies` | List recent AWS Cost Anomalies detected by Cost Explorer |
 | `server` | Run as an HTTP service daemon exposing `/healthz`, `/readyz`, `/report`, and `/metrics` |
 | `completion` | Generate shell autocompletion script (`bash`, `zsh`, `fish`) |
 | `version` | Display application version, commit SHA, build date, and license |
@@ -752,7 +807,11 @@ To run `aws-cost-report`, the executing IAM principal requires read permissions 
 | `--start` | | | Explicit billing start date (`YYYY-MM-01` or `YYYY-MM-DD`, inclusive) |
 | `--end` | | | Explicit billing end date (`YYYY-MM-01` or `YYYY-MM-DD`, inclusive) |
 | `--metrics` | | `UnblendedCost,BlendedCost,AmortizedCost` | Comma-separated cost metrics (`UnblendedCost`, `BlendedCost`, `AmortizedCost`, `NetUnblendedCost`, `NetAmortizedCost`, or `all` for EDP pricing) |
-| `--group-by` | | `SERVICE` | Grouping dimension(s), up to 2 comma-separated (`SERVICE`, `LINKED_ACCOUNT`, `TAG:<Key>`) |
+| `--group-by` | | `SERVICE` | Grouping dimension(s), up to 2 comma-separated (`SERVICE`, `LINKED_ACCOUNT`, `REGION`, `TAG:<Key>`) |
+| `--region` | `--filter-region` | | Filter costs by comma-separated AWS regions (e.g. `us-east-1,eu-west-1`) |
+| `--assume-role-arn` | | | AWS IAM Role ARN to assume via STS for cross-account cost auditing |
+| `--role-session-name` | | `aws-cost-report` | Optional session name when assuming an IAM role |
+| `--tag-key` | | | Query tag values for a specific tag key when running `tags` command |
 | `--name` | `--account-name` | | Human-readable name or alias for the AWS account (e.g. `Production Core`) |
 | `--threshold` | | `0.00` | SRE budget alert dollar threshold. Exits with code 1 if exceeded |
 | `--min-cost` | | `0.01` | Minimum cost threshold to display line items |

@@ -14,6 +14,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials/stscreds"
 	"github.com/aws/aws-sdk-go-v2/service/costexplorer"
 	cetypes "github.com/aws/aws-sdk-go-v2/service/costexplorer/types"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
@@ -29,6 +30,8 @@ type CostExplorerAPI interface {
 	GetCostAndUsage(ctx context.Context, params *costexplorer.GetCostAndUsageInput, optFns ...func(*costexplorer.Options)) (*costexplorer.GetCostAndUsageOutput, error)
 	GetDimensionValues(ctx context.Context, params *costexplorer.GetDimensionValuesInput, optFns ...func(*costexplorer.Options)) (*costexplorer.GetDimensionValuesOutput, error)
 	GetCostForecast(ctx context.Context, params *costexplorer.GetCostForecastInput, optFns ...func(*costexplorer.Options)) (*costexplorer.GetCostForecastOutput, error)
+	GetTags(ctx context.Context, params *costexplorer.GetTagsInput, optFns ...func(*costexplorer.Options)) (*costexplorer.GetTagsOutput, error)
+	GetAnomalies(ctx context.Context, params *costexplorer.GetAnomaliesInput, optFns ...func(*costexplorer.Options)) (*costexplorer.GetAnomaliesOutput, error)
 }
 
 // STSAPI defines the required STS client interface for account identification.
@@ -61,12 +64,30 @@ func NewClient(ce CostExplorerAPI, s STSAPI, i ...IAMAPI) *Client {
 	return c
 }
 
-// NewRealClient initializes authentic AWS SDK v2 clients using the default credential chain.
-func NewRealClient(ctx context.Context) (*Client, error) {
+// NewRealClient initializes authentic AWS SDK v2 clients using the default credential chain,
+// optionally assuming an IAM Role ARN via STS for cross-account operations.
+func NewRealClient(ctx context.Context, assumeRoleOpt ...string) (*Client, error) {
 	// Ambient config respecting user's default AWS_REGION, AWS_PROFILE, or environment
 	ambientCfg, err := awsconfig.LoadDefaultConfig(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load AWS configuration: %w", err)
+	}
+
+	assumeRoleARN := ""
+	sessionName := "aws-cost-report"
+	if len(assumeRoleOpt) > 0 && assumeRoleOpt[0] != "" {
+		assumeRoleARN = assumeRoleOpt[0]
+	}
+	if len(assumeRoleOpt) > 1 && assumeRoleOpt[1] != "" {
+		sessionName = assumeRoleOpt[1]
+	}
+
+	if assumeRoleARN != "" {
+		stsClientForAssume := sts.NewFromConfig(ambientCfg)
+		creds := stscreds.NewAssumeRoleProvider(stsClientForAssume, assumeRoleARN, func(opt *stscreds.AssumeRoleOptions) {
+			opt.RoleSessionName = sessionName
+		})
+		ambientCfg.Credentials = aws.NewCredentialsCache(creds)
 	}
 
 	stsClient := sts.NewFromConfig(ambientCfg)
@@ -844,6 +865,14 @@ func GenerateMockReport(cfg *config.Config, now time.Time) (*CostReport, error) 
 		{Name: "AWS CloudTrail", UnblendedCost: 0.02, BlendedCost: 0.02, AmortizedCost: 0.02, PrevUnblendedCost: 0.02, PrevBlendedCost: 0.02, PrevAmortizedCost: 0.02, HasPreviousCost: true, MoMDeltaAmount: 0.00, MoMDeltaPercent: 0.00},
 	}
 
+	if strings.EqualFold(cfg.Grouping.Key, "REGION") {
+		items = []LineItem{
+			{Name: "us-east-1", UnblendedCost: 12.80, BlendedCost: 12.80, AmortizedCost: 12.80, PrevUnblendedCost: 12.10, HasPreviousCost: true, MoMDeltaAmount: 0.70, MoMDeltaPercent: 5.79},
+			{Name: "us-west-2", UnblendedCost: 5.40, BlendedCost: 5.40, AmortizedCost: 5.40, PrevUnblendedCost: 5.20, HasPreviousCost: true, MoMDeltaAmount: 0.20, MoMDeltaPercent: 3.85},
+			{Name: "eu-west-1", UnblendedCost: 3.38, BlendedCost: 3.38, AmortizedCost: 3.38, PrevUnblendedCost: 3.30, HasPreviousCost: true, MoMDeltaAmount: 0.08, MoMDeltaPercent: 2.42},
+		}
+	}
+
 	hasRequestedNet := false
 	for _, m := range cfg.Defaults.Metrics {
 		if strings.HasPrefix(strings.ToLower(m), "net") {
@@ -925,6 +954,21 @@ func GenerateMockReport(cfg *config.Config, now time.Time) (*CostReport, error) 
 			}
 		}
 		filtered = chargeFiltered
+	}
+
+	if len(cfg.Regions) > 0 {
+		var regFiltered []LineItem
+		for _, item := range filtered {
+			for _, reg := range cfg.Regions {
+				if strings.EqualFold(item.Name, reg) || strings.Contains(strings.ToLower(item.Name), strings.ToLower(reg)) {
+					regFiltered = append(regFiltered, item)
+					break
+				}
+			}
+		}
+		if len(regFiltered) > 0 {
+			filtered = regFiltered
+		}
 	}
 
 	totals := TotalCosts{
@@ -1290,6 +1334,195 @@ func (c *Client) ListServices(ctx context.Context, cfg *config.Config, now time.
 	return services, nil
 }
 
+// GetMockTags returns default mock Cost Allocation Tag keys.
+func GetMockTags() []string {
+	return []string{
+		"Application",
+		"CostCenter",
+		"Environment",
+		"Owner",
+		"Project",
+		"Team",
+	}
+}
+
+// GetMockTagValues returns mock values for a specified tag key.
+func GetMockTagValues(key string) []string {
+	switch strings.ToLower(key) {
+	case "environment", "env":
+		return []string{"Development", "Production", "Staging"}
+	case "project":
+		return []string{"Billing", "CoreAPI", "FinOps", "Frontend"}
+	case "team":
+		return []string{"Data", "DevOps", "Platform", "Security"}
+	default:
+		return []string{"Default", "Primary", "Secondary"}
+	}
+}
+
+// ListTags retrieves available Cost Allocation Tag keys or tag values for a specified tag key.
+func (c *Client) ListTags(ctx context.Context, cfg *config.Config, now time.Time, tagKey ...string) ([]string, error) {
+	queryKey := ""
+	if len(tagKey) > 0 && tagKey[0] != "" {
+		queryKey = tagKey[0]
+	}
+
+	if cfg.MockMode || c.ceClient == nil {
+		if queryKey != "" {
+			return GetMockTagValues(queryKey), nil
+		}
+		return GetMockTags(), nil
+	}
+
+	dateRange, err := ResolveTimePeriod(now, cfg.MonthsBack, cfg.StartDate, cfg.EndDate, cfg.MTD)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve time period: %w", err)
+	}
+
+	timePeriod := &cetypes.DateInterval{
+		Start: aws.String(dateRange.Start.Format(DateFormat)),
+		End:   aws.String(dateRange.EndExclusiveAWS.Format(DateFormat)),
+	}
+
+	var results []string
+	var nextPageToken *string
+
+	for {
+		input := &costexplorer.GetTagsInput{
+			TimePeriod:    timePeriod,
+			NextPageToken: nextPageToken,
+		}
+		if queryKey != "" {
+			input.TagKey = aws.String(queryKey)
+		}
+
+		output, err := c.ceClient.GetTags(ctx, input)
+		if err != nil {
+			return nil, fmt.Errorf("AWS Cost Explorer GetTags failed: %w", err)
+		}
+
+		results = append(results, output.Tags...)
+
+		if output.NextPageToken == nil || *output.NextPageToken == "" {
+			break
+		}
+		nextPageToken = output.NextPageToken
+	}
+
+	sort.Strings(results)
+	return results, nil
+}
+
+// GetMockAnomalies returns realistic mock AWS Cost Anomaly Detection results.
+func GetMockAnomalies(accountID, currency string, periodStart, periodEnd string) *AnomalyReport {
+	if currency == "" {
+		currency = "USD"
+	}
+	return &AnomalyReport{
+		AccountID:   accountID,
+		Currency:    currency,
+		PeriodStart: periodStart,
+		PeriodEnd:   periodEnd,
+		TotalImpact: 42.50,
+		Anomalies: []AnomalyItem{
+			{
+				ID:            "anom-01928374-dynamodb-spike",
+				StartDate:     periodStart,
+				EndDate:       periodEnd,
+				Dimension:     "SERVICE",
+				Service:       "Amazon DynamoDB",
+				Region:        "us-east-1",
+				AccountID:     accountID,
+				ImpactAmount:  35.20,
+				ActualSpend:   48.50,
+				ExpectedSpend: 13.30,
+			},
+			{
+				ID:            "anom-01928375-nat-gateway",
+				StartDate:     periodStart,
+				EndDate:       periodEnd,
+				Dimension:     "SERVICE",
+				Service:       "Amazon Virtual Private Cloud",
+				Region:        "us-east-1",
+				AccountID:     accountID,
+				ImpactAmount:  7.30,
+				ActualSpend:   10.50,
+				ExpectedSpend: 3.20,
+			},
+		},
+	}
+}
+
+// ListAnomalies queries AWS Cost Anomaly Detection for spend spikes in the billing window.
+func (c *Client) ListAnomalies(ctx context.Context, cfg *config.Config, now time.Time) (*AnomalyReport, error) {
+	dateRange, err := ResolveTimePeriod(now, cfg.MonthsBack, cfg.StartDate, cfg.EndDate, cfg.MTD)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve time period: %w", err)
+	}
+
+	accountID := "715195480427"
+	if c.stsClient != nil {
+		if callerID, err := c.stsClient.GetCallerIdentity(ctx, &sts.GetCallerIdentityInput{}); err == nil && callerID.Account != nil {
+			accountID = *callerID.Account
+		}
+	}
+
+	periodStart := dateRange.Start.Format(DateFormat)
+	periodEnd := dateRange.EndInclusive.Format(DateFormat)
+
+	if cfg.MockMode || c.ceClient == nil {
+		return GetMockAnomalies(accountID, cfg.Defaults.Currency, periodStart, periodEnd), nil
+	}
+
+	input := &costexplorer.GetAnomaliesInput{
+		DateInterval: &cetypes.AnomalyDateInterval{
+			StartDate: aws.String(periodStart),
+			EndDate:   aws.String(periodEnd),
+		},
+	}
+
+	output, err := c.ceClient.GetAnomalies(ctx, input)
+	if err != nil {
+		return nil, fmt.Errorf("AWS Cost Explorer GetAnomalies failed: %w", err)
+	}
+
+	report := &AnomalyReport{
+		AccountID:   accountID,
+		Currency:    cfg.Defaults.Currency,
+		PeriodStart: periodStart,
+		PeriodEnd:   periodEnd,
+	}
+
+	for _, a := range output.Anomalies {
+		item := AnomalyItem{
+			ID:        aws.ToString(a.AnomalyId),
+			StartDate: aws.ToString(a.AnomalyStartDate),
+			EndDate:   aws.ToString(a.AnomalyEndDate),
+			Dimension: aws.ToString(a.DimensionValue),
+		}
+		if a.Impact != nil {
+			item.ImpactAmount = roundToTwo(a.Impact.TotalImpact)
+			item.ActualSpend = roundToTwo(aws.ToFloat64(a.Impact.TotalActualSpend))
+			item.ExpectedSpend = roundToTwo(aws.ToFloat64(a.Impact.TotalExpectedSpend))
+			report.TotalImpact += item.ImpactAmount
+		}
+		for _, rc := range a.RootCauses {
+			if rc.Service != nil {
+				item.Service = *rc.Service
+			}
+			if rc.Region != nil {
+				item.Region = *rc.Region
+			}
+			if rc.LinkedAccount != nil {
+				item.AccountID = *rc.LinkedAccount
+			}
+		}
+		report.Anomalies = append(report.Anomalies, item)
+	}
+	report.TotalImpact = roundToTwo(report.TotalImpact)
+	return report, nil
+}
+
 // isRetryableCostExplorerError checks whether an AWS Cost Explorer error is caused by rate limiting,
 // throttling, or transient conditions that should be retried with exponential backoff.
 // It prioritizes typed smithy.APIError matching before falling back to string inspection.
@@ -1633,6 +1866,15 @@ func buildFilterExpression(cfg *config.Config) *cetypes.Expression {
 					Key:    cetypes.DimensionRecordType,
 					Values: []string{"Credit", "Refund"},
 				},
+			},
+		})
+	}
+
+	if len(cfg.Regions) > 0 {
+		andExpressions = append(andExpressions, cetypes.Expression{
+			Dimensions: &cetypes.DimensionValues{
+				Key:    cetypes.DimensionRegion,
+				Values: cfg.Regions,
 			},
 		})
 	}

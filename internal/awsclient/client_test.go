@@ -49,6 +49,41 @@ func (m *mockCEClient) GetCostForecast(ctx context.Context, params *costexplorer
 	}, nil
 }
 
+func (m *mockCEClient) GetTags(ctx context.Context, params *costexplorer.GetTagsInput, optFns ...func(*costexplorer.Options)) (*costexplorer.GetTagsOutput, error) {
+	if params.TagKey != nil && *params.TagKey != "" {
+		return &costexplorer.GetTagsOutput{
+			Tags: GetMockTagValues(*params.TagKey),
+		}, nil
+	}
+	return &costexplorer.GetTagsOutput{
+		Tags: GetMockTags(),
+	}, nil
+}
+
+func (m *mockCEClient) GetAnomalies(ctx context.Context, params *costexplorer.GetAnomaliesInput, optFns ...func(*costexplorer.Options)) (*costexplorer.GetAnomaliesOutput, error) {
+	return &costexplorer.GetAnomaliesOutput{
+		Anomalies: []cetypes.Anomaly{
+			{
+				AnomalyId:        aws.String("anom-01928374-dynamodb-spike"),
+				AnomalyStartDate: aws.String("2026-09-01"),
+				AnomalyEndDate:   aws.String("2026-09-30"),
+				DimensionValue:   aws.String("SERVICE"),
+				Impact: &cetypes.Impact{
+					TotalImpact:        35.20,
+					TotalActualSpend:   aws.Float64(48.50),
+					TotalExpectedSpend: aws.Float64(13.30),
+				},
+				RootCauses: []cetypes.RootCause{
+					{
+						Service: aws.String("Amazon DynamoDB"),
+						Region:  aws.String("us-east-1"),
+					},
+				},
+			},
+		},
+	}, nil
+}
+
 type mockSTSClient struct {
 	accountID string
 }
@@ -525,6 +560,14 @@ func (t *throttlingCEClient) GetCostForecast(ctx context.Context, params *costex
 	return &costexplorer.GetCostForecastOutput{}, nil
 }
 
+func (t *throttlingCEClient) GetTags(ctx context.Context, params *costexplorer.GetTagsInput, optFns ...func(*costexplorer.Options)) (*costexplorer.GetTagsOutput, error) {
+	return &costexplorer.GetTagsOutput{}, nil
+}
+
+func (t *throttlingCEClient) GetAnomalies(ctx context.Context, params *costexplorer.GetAnomaliesInput, optFns ...func(*costexplorer.Options)) (*costexplorer.GetAnomaliesOutput, error) {
+	return &costexplorer.GetAnomaliesOutput{}, nil
+}
+
 func TestThrottlingRetry(t *testing.T) {
 	ceMock := &throttlingCEClient{}
 	stsMock := &mockSTSClient{accountID: "111122223333"}
@@ -573,6 +616,14 @@ func (s *smithyThrottlingCEClient) GetDimensionValues(ctx context.Context, param
 
 func (s *smithyThrottlingCEClient) GetCostForecast(ctx context.Context, params *costexplorer.GetCostForecastInput, optFns ...func(*costexplorer.Options)) (*costexplorer.GetCostForecastOutput, error) {
 	return &costexplorer.GetCostForecastOutput{}, nil
+}
+
+func (s *smithyThrottlingCEClient) GetTags(ctx context.Context, params *costexplorer.GetTagsInput, optFns ...func(*costexplorer.Options)) (*costexplorer.GetTagsOutput, error) {
+	return &costexplorer.GetTagsOutput{}, nil
+}
+
+func (s *smithyThrottlingCEClient) GetAnomalies(ctx context.Context, params *costexplorer.GetAnomaliesInput, optFns ...func(*costexplorer.Options)) (*costexplorer.GetAnomaliesOutput, error) {
+	return &costexplorer.GetAnomaliesOutput{}, nil
 }
 
 func TestSmithyAPIErrorRetry(t *testing.T) {
@@ -1145,5 +1196,72 @@ func TestMockReportChargeTypeAndExcludeCredits(t *testing.T) {
 	}
 	if !repEx.Metadata.ExcludeCredits {
 		t.Errorf("expected ExcludeCredits=true in metadata")
+	}
+}
+
+func TestListTagsAndAnomalies(t *testing.T) {
+	ceMock := &mockCEClient{}
+	stsMock := &mockSTSClient{accountID: "715195480427"}
+	client := NewClient(ceMock, stsMock)
+
+	ctx := context.Background()
+	cfg := config.DefaultConfig()
+	refTime := time.Date(2026, time.October, 29, 12, 0, 0, 0, time.UTC)
+
+	// 1. List Tag keys
+	tags, err := client.ListTags(ctx, cfg, refTime)
+	if err != nil {
+		t.Fatalf("ListTags failed: %v", err)
+	}
+	if len(tags) == 0 {
+		t.Fatalf("expected non-empty tag keys")
+	}
+
+	// 2. List Tag values for key Environment
+	values, err := client.ListTags(ctx, cfg, refTime, "Environment")
+	if err != nil {
+		t.Fatalf("ListTags values failed: %v", err)
+	}
+	if len(values) == 0 {
+		t.Fatalf("expected non-empty tag values")
+	}
+
+	// 3. List Anomalies
+	anomReport, err := client.ListAnomalies(ctx, cfg, refTime)
+	if err != nil {
+		t.Fatalf("ListAnomalies failed: %v", err)
+	}
+	if anomReport == nil || len(anomReport.Anomalies) == 0 {
+		t.Fatalf("expected non-empty anomalies")
+	}
+	if anomReport.TotalImpact <= 0 {
+		t.Errorf("expected positive total anomaly impact")
+	}
+}
+
+func TestRegionGroupingAndFilter(t *testing.T) {
+	refTime := time.Date(2026, time.October, 29, 12, 0, 0, 0, time.UTC)
+
+	// 1. Region grouping
+	cfgRegion := config.DefaultConfig()
+	cfgRegion.Grouping = config.GroupingConfig{Type: "DIMENSION", Key: "REGION"}
+	repRegion, err := GenerateMockReport(cfgRegion, refTime)
+	if err != nil {
+		t.Fatalf("GenerateMockReport failed: %v", err)
+	}
+	if len(repRegion.Items) == 0 || repRegion.Items[0].Name != "us-east-1" {
+		t.Errorf("expected us-east-1 first regional item, got %+v", repRegion.Items)
+	}
+
+	// 2. Region filter
+	cfgFilter := config.DefaultConfig()
+	cfgFilter.Grouping = config.GroupingConfig{Type: "DIMENSION", Key: "REGION"}
+	cfgFilter.Regions = []string{"us-west-2"}
+	repFilter, err := GenerateMockReport(cfgFilter, refTime)
+	if err != nil {
+		t.Fatalf("GenerateMockReport failed: %v", err)
+	}
+	if len(repFilter.Items) != 1 || repFilter.Items[0].Name != "us-west-2" {
+		t.Errorf("expected only us-west-2 item, got %+v", repFilter.Items)
 	}
 }

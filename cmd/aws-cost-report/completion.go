@@ -36,8 +36,8 @@ _aws_cost_report() {
     local cur prev words cword
     _init_completion || return
 
-    local commands="generate services server completion version help"
-    local flags="--compare --mtd --current-month --daily --granularity --forecast --monthly --trend --format --months --start --end --metrics --group-by --name --account-name --filter --service --tag --tag-filter --exclude-credits --charge-type --record-type --threshold --fail-on-threshold --top --min-cost --slack-webhook --teams-webhook --webhook-url --s3-bucket --s3-key --currency --no-cache --cache-dir --clear-cache --no-color --mock --config -c --output -o --json-summary --write-summary --version -v --help -h"
+    local commands="generate services tags anomalies server completion version help"
+    local flags="--compare --mtd --current-month --daily --granularity --forecast --monthly --trend --format --months --start --end --metrics --group-by --region --filter-region --assume-role-arn --role-session-name --tag-key --name --account-name --filter --service --tag --tag-filter --exclude-credits --charge-type --record-type --threshold --fail-on-threshold --top --min-cost --slack-webhook --teams-webhook --webhook-url --s3-bucket --s3-key --currency --no-cache --cache-dir --clear-cache --no-color --mock --config -c --output -o --json-summary --write-summary --version -v --help -h"
 
     case "${prev}" in
         --charge-type|--record-type)
@@ -95,6 +95,8 @@ _aws_cost_report() {
     commands=(
         'generate:Generate monthly billing and usage cost report'
         'services:List official AWS Cost Explorer service names'
+        'tags:List active AWS Cost Allocation Tag keys or tag values'
+        'anomalies:List recent AWS Cost Anomalies detected by Cost Explorer'
         'server:Run as an HTTP service daemon exposing /healthz, /readyz, /report, and /metrics'
         'completion:Generate shell autocompletion script (bash, zsh, fish)'
         'version:Print application version metadata and exit'
@@ -128,7 +130,12 @@ _aws_cost_report() {
                         '--months[Number of historical complete months back to query]:months:' \
                         '--start[Explicit billing start date (inclusive)]:date:' \
                         '--end[Explicit billing end date (inclusive)]:date:' \
-                        '--group-by[Grouping dimension]:dimension:(SERVICE LINKED_ACCOUNT TAG\:)' \
+                        '--group-by[Grouping dimension]:dimension:(SERVICE LINKED_ACCOUNT REGION TAG\:)' \
+                        '--region[Filter costs by AWS region]:regions:' \
+                        '--filter-region[Alias for --region]:regions:' \
+                        '--assume-role-arn[AWS IAM Role ARN to assume via STS]:arn:' \
+                        '--role-session-name[Role session name]:name:' \
+                        '--tag-key[Query tag values for specific tag key]:tagkey:' \
                         '--name[Human-readable name or alias for the AWS account]:name:' \
                         '--account-name[Alias for --name]:name:' \
                         '--filter[Filter services by name, alias, or substring]:services:' \
@@ -178,6 +185,8 @@ func generateFishCompletion(w io.Writer) {
 # Subcommands
 complete -c aws-cost-report -n "__fish_use_subcommand" -a generate -d "Generate monthly billing and usage cost report"
 complete -c aws-cost-report -n "__fish_use_subcommand" -a services -d "List official AWS Cost Explorer service names"
+complete -c aws-cost-report -n "__fish_use_subcommand" -a tags -d "List active AWS Cost Allocation Tag keys or tag values"
+complete -c aws-cost-report -n "__fish_use_subcommand" -a anomalies -d "List recent AWS Cost Anomalies detected by Cost Explorer"
 complete -c aws-cost-report -n "__fish_use_subcommand" -a server -d "Run as an HTTP service daemon exposing /healthz, /readyz, /report, and /metrics"
 complete -c aws-cost-report -n "__fish_use_subcommand" -a completion -d "Generate shell completion script (bash, zsh, fish)"
 complete -c aws-cost-report -n "__fish_use_subcommand" -a version -d "Print application version metadata and exit"
@@ -196,7 +205,12 @@ complete -c aws-cost-report -l forecast -d "Query AWS Cost Explorer projected mo
 complete -c aws-cost-report -l monthly -d "Display multi-month historical breakdown in column format"
 complete -c aws-cost-report -l trend -d "Alias for --monthly"
 complete -c aws-cost-report -l format -x -a "table markdown html json csv prometheus" -d "Output format"
-complete -c aws-cost-report -l group-by -x -a "SERVICE LINKED_ACCOUNT" -d "Grouping dimension"
+complete -c aws-cost-report -l group-by -x -a "SERVICE LINKED_ACCOUNT REGION" -d "Grouping dimension"
+complete -c aws-cost-report -l region -d "Filter costs by AWS regions"
+complete -c aws-cost-report -l filter-region -d "Alias for --region"
+complete -c aws-cost-report -l assume-role-arn -d "AWS IAM Role ARN to assume via STS"
+complete -c aws-cost-report -l role-session-name -d "Session name when assuming IAM role"
+complete -c aws-cost-report -l tag-key -d "Query tag values for specific tag key"
 complete -c aws-cost-report -l currency -x -a "USD EUR GBP JPY AUD CAD CHF" -d "Currency code"
 complete -c aws-cost-report -l exclude-credits -d "Exclude credits and refunds from billing calculations"
 complete -c aws-cost-report -l charge-type -x -a "Usage Credit Refund Tax Upfront Recurring Support Other" -d "Filter costs by charge/record type"

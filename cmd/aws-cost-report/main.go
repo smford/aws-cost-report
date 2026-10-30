@@ -48,6 +48,8 @@ USAGE:
 COMMANDS:
   generate          Generate monthly billing and usage cost report (default)
   services          List official AWS Cost Explorer service names available in your account
+  tags              List active AWS Cost Allocation Tag keys or tag values
+  anomalies         List recent AWS Cost Anomalies detected by Cost Explorer
   server            Run as an HTTP service daemon exposing /healthz, /readyz, /report, and /metrics
   completion        Generate shell autocompletion script (bash, zsh, fish)
   version           Print application version metadata and exit
@@ -63,7 +65,12 @@ GENERATE FLAGS:
   --months <int>          Number of historical complete months back to query (default: 1)
   --start <YYYY-MM-DD>    Explicit billing start date (inclusive)
   --end <YYYY-MM-DD>      Explicit billing end date (inclusive)
-  --group-by <dim>        Grouping dimension: SERVICE (default), LINKED_ACCOUNT, or TAG:<Key>
+  --group-by <dim>        Grouping dimension: SERVICE (default), LINKED_ACCOUNT, REGION, or TAG:<Key>
+  --region <regions>      Filter costs by comma-separated AWS regions (e.g. us-east-1,eu-west-1)
+  --filter-region <reg>   Alias for --region
+  --assume-role-arn <arn> AWS IAM Role ARN to assume via STS for cross-account cost auditing
+  --role-session-name <n> Optional session name when assuming an IAM role (default: aws-cost-report)
+  --tag-key <key>         Query tag values for a specific tag key when running tags command
   --name <string>         Human-readable name or alias for the AWS account (e.g. 'Production Core')
   --account-name <name>   Alias for --name
   --filter <names>        Filter services by official name, alias, or substring (e.g. 'Amazon DynamoDB', 'S3', 'Lambda')
@@ -178,6 +185,12 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	case "services", "list-services", "--services", "--list-services":
 		cmd = "services"
 		cmdArgs = args[1:]
+	case "tags", "list-tags", "--tags", "--list-tags":
+		cmd = "tags"
+		cmdArgs = args[1:]
+	case "anomalies", "list-anomalies", "--anomalies", "--list-anomalies":
+		cmd = "anomalies"
+		cmdArgs = args[1:]
 	case "server":
 		cmdArgs = args[1:]
 	default:
@@ -227,6 +240,14 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return runListServices(cfg, stdout, stderr)
 	}
 
+	if cmd == "tags" || cfg.ListTags {
+		return runListTags(cfg, stdout, stderr)
+	}
+
+	if cmd == "anomalies" || cfg.ListAnomalies {
+		return runListAnomalies(cfg, stdout, stderr)
+	}
+
 	if !cfg.NoCache && cfg.CacheDir == "" {
 		cfg.CacheDir = awsclient.DefaultCacheDir()
 	}
@@ -243,7 +264,7 @@ func runListServices(cfg *config.Config, stdout, stderr io.Writer) int {
 		client = awsclient.NewClient(nil, nil)
 	} else {
 		var err error
-		client, err = awsclient.NewRealClient(ctx)
+		client, err = awsclient.NewRealClient(ctx, cfg.AssumeRoleARN, cfg.RoleSessionName)
 		if err != nil {
 			printCredentialHelp(stderr, err)
 			return 1
@@ -269,6 +290,96 @@ func runListServices(cfg *config.Config, stdout, stderr io.Writer) int {
 	return 0
 }
 
+func runListTags(cfg *config.Config, stdout, stderr io.Writer) int {
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancel()
+
+	var client *awsclient.Client
+	if cfg.MockMode {
+		client = awsclient.NewClient(nil, nil)
+	} else {
+		var err error
+		client, err = awsclient.NewRealClient(ctx, cfg.AssumeRoleARN, cfg.RoleSessionName)
+		if err != nil {
+			printCredentialHelp(stderr, err)
+			return 1
+		}
+	}
+
+	tags, err := client.ListTags(ctx, cfg, time.Now(), cfg.TagKeyToQuery)
+	if err != nil {
+		printCredentialHelp(stderr, err)
+		return 1
+	}
+
+	if cfg.Reporting.Format == "json" {
+		_ = json.NewEncoder(stdout).Encode(tags)
+		return 0
+	}
+
+	if cfg.TagKeyToQuery != "" {
+		fmt.Fprintf(stdout, "AWS Cost Allocation Tag Values for %q:\n", cfg.TagKeyToQuery)
+	} else {
+		fmt.Fprintln(stdout, "Official AWS Cost Allocation Tag Keys:")
+	}
+	for _, t := range tags {
+		fmt.Fprintf(stdout, "  • %s\n", t)
+	}
+	return 0
+}
+
+func runListAnomalies(cfg *config.Config, stdout, stderr io.Writer) int {
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancel()
+
+	var client *awsclient.Client
+	if cfg.MockMode {
+		client = awsclient.NewClient(nil, nil)
+	} else {
+		var err error
+		client, err = awsclient.NewRealClient(ctx, cfg.AssumeRoleARN, cfg.RoleSessionName)
+		if err != nil {
+			printCredentialHelp(stderr, err)
+			return 1
+		}
+	}
+
+	report, err := client.ListAnomalies(ctx, cfg, time.Now())
+	if err != nil {
+		printCredentialHelp(stderr, err)
+		return 1
+	}
+
+	if cfg.Reporting.Format == "json" {
+		_ = json.NewEncoder(stdout).Encode(report)
+		return 0
+	}
+
+	sym := awsclient.CurrencySymbol(report.Currency)
+	fmt.Fprintf(stdout, "AWS COST ANOMALY DETECTION REPORT\n")
+	fmt.Fprintf(stdout, "Account ID: %s | Period: %s to %s | Total Impact: %s%.2f\n\n",
+		report.AccountID, report.PeriodStart, report.PeriodEnd, sym, report.TotalImpact)
+
+	if len(report.Anomalies) == 0 {
+		fmt.Fprintln(stdout, "No cost anomalies detected during this billing period.")
+		return 0
+	}
+
+	for _, a := range report.Anomalies {
+		svc := a.Service
+		if svc == "" {
+			svc = a.Dimension
+		}
+		reg := a.Region
+		if reg == "" {
+			reg = "global"
+		}
+		fmt.Fprintf(stdout, "  • [%s] %s (%s): Impact %s%.2f (Actual: %s%.2f, Expected: %s%.2f)\n",
+			a.ID, svc, reg, sym, a.ImpactAmount, sym, a.ActualSpend, sym, a.ExpectedSpend)
+	}
+	return 0
+}
+
 func runCLI(cfg *config.Config, stdout, stderr io.Writer) int {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
@@ -278,7 +389,7 @@ func runCLI(cfg *config.Config, stdout, stderr io.Writer) int {
 		client = awsclient.NewClient(nil, nil)
 	} else {
 		var err error
-		client, err = awsclient.NewRealClient(ctx)
+		client, err = awsclient.NewRealClient(ctx, cfg.AssumeRoleARN, cfg.RoleSessionName)
 		if err != nil {
 			printCredentialHelp(stderr, err)
 			return 1

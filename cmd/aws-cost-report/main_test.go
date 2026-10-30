@@ -658,6 +658,42 @@ func TestRunCommandEntrypoints(t *testing.T) {
 			containsText: "Official AWS Cost Explorer Service Names:",
 		},
 		{
+			name:         "tags mock text",
+			args:         []string{"tags", "--mock"},
+			expectedCode: 0,
+			containsText: "Official AWS Cost Allocation Tag Keys:",
+		},
+		{
+			name:         "tags mock json",
+			args:         []string{"tags", "--mock", "--format=json"},
+			expectedCode: 0,
+			containsText: "Environment",
+		},
+		{
+			name:         "tags mock key values",
+			args:         []string{"tags", "--mock", "--tag-key=Environment"},
+			expectedCode: 0,
+			containsText: "AWS Cost Allocation Tag Values for \"Environment\":",
+		},
+		{
+			name:         "anomalies mock text",
+			args:         []string{"anomalies", "--mock"},
+			expectedCode: 0,
+			containsText: "AWS COST ANOMALY DETECTION REPORT",
+		},
+		{
+			name:         "anomalies mock json",
+			args:         []string{"anomalies", "--mock", "--format=json"},
+			expectedCode: 0,
+			containsText: "anom-01928374-dynamodb-spike",
+		},
+		{
+			name:         "generate mock region grouping",
+			args:         []string{"generate", "--mock", "--group-by=REGION"},
+			expectedCode: 0,
+			containsText: "us-east-1",
+		},
+		{
 			name:         "generate with --version flag",
 			args:         []string{"generate", "--version"},
 			expectedCode: 0,

@@ -623,6 +623,46 @@ func TestConfigChargeTypeAndExcludeCredits(t *testing.T) {
 	}
 }
 
+func TestConfigRegionsAndAssumeRole(t *testing.T) {
+	// 1. Region flag
+	cfg1, err := LoadConfig([]string{"--region", "us-east-1,eu-west-1"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(cfg1.Regions) != 2 || cfg1.Regions[0] != "us-east-1" || cfg1.Regions[1] != "eu-west-1" {
+		t.Errorf("expected [us-east-1 eu-west-1], got %+v", cfg1.Regions)
+	}
+
+	// 2. Assume role flags
+	cfg2, err := LoadConfig([]string{
+		"--assume-role-arn", "arn:aws:iam::123456789012:role/BillingAudit",
+		"--role-session-name", "my-audit-session",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg2.AssumeRoleARN != "arn:aws:iam::123456789012:role/BillingAudit" {
+		t.Errorf("expected assume role ARN set, got %s", cfg2.AssumeRoleARN)
+	}
+	if cfg2.RoleSessionName != "my-audit-session" {
+		t.Errorf("expected role session name 'my-audit-session', got %s", cfg2.RoleSessionName)
+	}
+
+	// 3. Environment variable fallback
+	t.Setenv("AWS_ROLE_ARN", "arn:aws:iam::999888777666:role/EnvRole")
+	t.Setenv("AWS_ROLE_SESSION_NAME", "env-session")
+	cfg3, err := LoadConfig([]string{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg3.AssumeRoleARN != "arn:aws:iam::999888777666:role/EnvRole" {
+		t.Errorf("expected ARN from env, got %s", cfg3.AssumeRoleARN)
+	}
+	if cfg3.RoleSessionName != "env-session" {
+		t.Errorf("expected session name from env, got %s", cfg3.RoleSessionName)
+	}
+}
+
 func TestConfigValidation(t *testing.T) {
 	tests := []struct {
 		name        string

@@ -165,6 +165,12 @@ type Config struct {
 	TagFilters            TagFilterMap `yaml:"tag_filters"`
 	ChargeTypes           []string     `yaml:"charge_types"`
 	ExcludeCredits        bool         `yaml:"exclude_credits"`
+	Regions               []string     `yaml:"regions"`
+	AssumeRoleARN         string       `yaml:"assume_role_arn"`
+	RoleSessionName       string       `yaml:"role_session_name"`
+	ListTags              bool         `yaml:"-"`
+	TagKeyToQuery         string       `yaml:"-"`
+	ListAnomalies         bool         `yaml:"-"`
 	NoColor               bool         `yaml:"no_color"`
 	NoCache               bool         `yaml:"no_cache"`
 	CacheDir              string       `yaml:"cache_dir"`
@@ -300,6 +306,15 @@ func LoadConfig(args []string) (*Config, error) {
 		excludeCreditsFlag = fs.Bool("exclude-credits", false, "Exclude credits and refunds from billing calculations")
 		chargeTypeFlag     = fs.String("charge-type", "", "Comma-separated list of charge/record types (e.g. Usage,Tax,Credit,Refund)")
 		recordTypeFlag     = fs.String("record-type", "", "Alias for --charge-type")
+		regionFlag         = fs.String("region", "", "Filter costs by comma-separated AWS regions (e.g. us-east-1,eu-west-1)")
+		filterRegionFlag   = fs.String("filter-region", "", "Alias for --region")
+		assumeRoleFlag     = fs.String("assume-role-arn", "", "AWS IAM Role ARN to assume via STS for cross-account cost auditing")
+		sessionNameFlag    = fs.String("role-session-name", "", "Optional role session name when assuming an IAM role")
+		tagsFlag           = fs.Bool("tags", false, "List available Cost Allocation Tag keys")
+		listTagsFlag       = fs.Bool("list-tags", false, "Alias for --tags")
+		tagKeyFlag         = fs.String("tag-key", "", "Query tag values for a specific tag key when using --tags")
+		anomaliesFlag      = fs.Bool("anomalies", false, "List recent AWS Cost Anomalies detected by Cost Explorer")
+		listAnomFlag       = fs.Bool("list-anomalies", false, "Alias for --anomalies")
 	)
 
 	var tagFlags tagFlagSlice
@@ -571,6 +586,50 @@ func LoadConfig(args []string) (*Config, error) {
 	}
 	if *servicesFlag || *listServFlag {
 		cfg.ListServices = true
+	}
+	if *tagsFlag || *listTagsFlag {
+		cfg.ListTags = true
+	}
+	if *tagKeyFlag != "" {
+		cfg.TagKeyToQuery = strings.TrimSpace(*tagKeyFlag)
+	}
+	if *anomaliesFlag || *listAnomFlag {
+		cfg.ListAnomalies = true
+	}
+
+	rawRegion := *regionFlag
+	if rawRegion == "" {
+		rawRegion = *filterRegionFlag
+	}
+	if rawRegion != "" {
+		parts := strings.Split(rawRegion, ",")
+		var cleaned []string
+		for _, p := range parts {
+			trimmed := strings.TrimSpace(p)
+			if trimmed != "" {
+				cleaned = append(cleaned, trimmed)
+			}
+		}
+		if len(cleaned) > 0 {
+			cfg.Regions = cleaned
+		}
+	}
+
+	if *assumeRoleFlag != "" {
+		cfg.AssumeRoleARN = strings.TrimSpace(*assumeRoleFlag)
+	}
+	if cfg.AssumeRoleARN == "" {
+		cfg.AssumeRoleARN = os.Getenv("AWS_ROLE_ARN")
+	}
+
+	if *sessionNameFlag != "" {
+		cfg.RoleSessionName = strings.TrimSpace(*sessionNameFlag)
+	}
+	if cfg.RoleSessionName == "" {
+		cfg.RoleSessionName = os.Getenv("AWS_ROLE_SESSION_NAME")
+	}
+	if cfg.RoleSessionName == "" {
+		cfg.RoleSessionName = "aws-cost-report"
 	}
 
 	rawFilter := *filterFlag
