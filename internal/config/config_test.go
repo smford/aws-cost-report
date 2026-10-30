@@ -553,3 +553,32 @@ slack_webhook: ${TEST_WEBHOOK_URL}
 		t.Errorf("expected expanded Slack webhook URL, got %s", cfg.SlackWebhook)
 	}
 }
+
+func TestConfigChargeTypeAndExcludeCredits(t *testing.T) {
+	// 1. --exclude-credits flag
+	cfg1, err := LoadConfig([]string{"--exclude-credits"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !cfg1.ExcludeCredits {
+		t.Error("expected ExcludeCredits=true, got false")
+	}
+
+	// 2. --charge-type flag
+	cfg2, err := LoadConfig([]string{"--charge-type", "usage,tax,refund"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(cfg2.ChargeTypes) != 3 || cfg2.ChargeTypes[0] != "Usage" || cfg2.ChargeTypes[1] != "Tax" || cfg2.ChargeTypes[2] != "Refund" {
+		t.Errorf("expected [Usage Tax Refund], got %+v", cfg2.ChargeTypes)
+	}
+
+	// 3. --record-type alias
+	cfg3, err := LoadConfig([]string{"--record-type", "Credit"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(cfg3.ChargeTypes) != 1 || cfg3.ChargeTypes[0] != "Credit" {
+		t.Errorf("expected [Credit], got %+v", cfg3.ChargeTypes)
+	}
+}

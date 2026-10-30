@@ -34,6 +34,8 @@ type ReportMetadata struct {
 	ActiveServices   int    `json:"active_services"`
 	GroupKey         string `json:"group_key"`
 	TagFilter        string `json:"tag_filter,omitempty"`
+	ChargeTypeFilter string `json:"charge_type_filter,omitempty"`
+	ExcludeCredits   bool   `json:"exclude_credits,omitempty"`
 }
 
 // TotalCosts encapsulates aggregate metrics across all active services.

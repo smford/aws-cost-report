@@ -35,9 +35,13 @@ _aws_cost_report() {
     _init_completion || return
 
     local commands="generate services server completion version help"
-    local flags="--compare --mtd --current-month --daily --granularity --forecast --monthly --trend --format --months --start --end --metrics --group-by --name --account-name --filter --service --tag --tag-filter --threshold --fail-on-threshold --top --min-cost --slack-webhook --teams-webhook --s3-bucket --s3-key --currency --no-color --mock --config -c --output -o --json-summary --write-summary --version -v --help -h"
+    local flags="--compare --mtd --current-month --daily --granularity --forecast --monthly --trend --format --months --start --end --metrics --group-by --name --account-name --filter --service --tag --tag-filter --exclude-credits --charge-type --record-type --threshold --fail-on-threshold --top --min-cost --slack-webhook --teams-webhook --s3-bucket --s3-key --currency --no-color --mock --config -c --output -o --json-summary --write-summary --version -v --help -h"
 
     case "${prev}" in
+        --charge-type|--record-type)
+            COMPREPLY=( $(compgen -W "Usage Credit Refund Tax Upfront Recurring Support Other" -- "${cur}") )
+            return 0
+            ;;
         --granularity)
             COMPREPLY=( $(compgen -W "MONTHLY DAILY" -- "${cur}") )
             return 0
@@ -129,6 +133,9 @@ _aws_cost_report() {
                         '--service[Alias for --filter]:services:' \
                         '--tag[Filter costs by AWS Cost Allocation Tag]:tag:' \
                         '--tag-filter[Alias for --tag]:tag:' \
+                        '--exclude-credits[Exclude credits and refunds from billing calculations]' \
+                        '--charge-type[Filter costs by charge/record type]:charge:(Usage Credit Refund Tax Upfront Recurring Support Other)' \
+                        '--record-type[Alias for --charge-type]:charge:(Usage Credit Refund Tax Upfront Recurring Support Other)' \
                         '--threshold[SRE budget alert dollar threshold]:amount:' \
                         '--top[Show top N highest cost items and aggregate remainder]:count:' \
                         '--min-cost[Minimum cost floor to display]:cost:' \
@@ -185,6 +192,9 @@ complete -c aws-cost-report -l trend -d "Alias for --monthly"
 complete -c aws-cost-report -l format -x -a "table markdown json csv prometheus" -d "Output format"
 complete -c aws-cost-report -l group-by -x -a "SERVICE LINKED_ACCOUNT" -d "Grouping dimension"
 complete -c aws-cost-report -l currency -x -a "USD EUR GBP JPY AUD CAD CHF" -d "Currency code"
+complete -c aws-cost-report -l exclude-credits -d "Exclude credits and refunds from billing calculations"
+complete -c aws-cost-report -l charge-type -x -a "Usage Credit Refund Tax Upfront Recurring Support Other" -d "Filter costs by charge/record type"
+complete -c aws-cost-report -l record-type -x -a "Usage Credit Refund Tax Upfront Recurring Support Other" -d "Alias for --charge-type"
 complete -c aws-cost-report -l mock -d "Run in offline mode with simulated AWS billing data"
 complete -c aws-cost-report -l no-color -d "Disable ANSI color output in terminal tables"
 complete -c aws-cost-report -l config -s c -r -d "Path to YAML configuration file"

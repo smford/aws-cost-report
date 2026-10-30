@@ -69,6 +69,8 @@ GENERATE FLAGS:
   --filter <names>        Filter services by official name, alias, or substring (e.g. 'Amazon DynamoDB', 'S3', 'Lambda')
   --tag <Key=Value>       Filter costs by AWS Cost Allocation Tag (e.g. 'Environment=Production', 'Project=Billing')
   --tag-filter <Key=Val>  Alias for --tag. Supports multiple tags or comma-separated values (e.g. 'Env=Prod,Stage')
+  --exclude-credits       Exclude credits and refunds from billing calculations
+  --charge-type <types>   Filter costs by charge/record type (e.g. 'Usage,Tax', 'Credit')
   --threshold <float>     SRE budget alert threshold dollar amount. Exits with code 1 if exceeded
   --top <int>             Display top N highest cost drivers and aggregate remainder into "Other"
   --min-cost <float>      Minimum cost floor to display in itemized breakdown (default: 0.01)

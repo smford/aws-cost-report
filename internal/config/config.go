@@ -161,6 +161,8 @@ type Config struct {
 	MockMode              bool         `yaml:"-"`
 	Filters               []string     `yaml:"filters"`
 	TagFilters            TagFilterMap `yaml:"tag_filters"`
+	ChargeTypes           []string     `yaml:"charge_types"`
+	ExcludeCredits        bool         `yaml:"exclude_credits"`
 	NoColor               bool         `yaml:"no_color"`
 	OutputFile            string       `yaml:"output_file"`
 	JSONSummaryFile       string       `yaml:"json_summary_file"`
@@ -245,47 +247,50 @@ func LoadConfig(args []string) (*Config, error) {
 	fs := flag.NewFlagSet("aws-cost-report", flag.ContinueOnError)
 
 	var (
-		configPath   = fs.String("config", "", "Path to YAML configuration file")
-		configPathSh = fs.String("c", "", "Path to YAML configuration file (shorthand)")
-		showVersion  = fs.Bool("version", false, "Print version information and exit")
-		showVerSh    = fs.Bool("v", false, "Print version information and exit (shorthand)")
-		months       = fs.Int("months", 0, "Query historical full months back (default: 1)")
-		start        = fs.String("start", "", "Explicit start date (YYYY-MM-01)")
-		end          = fs.String("end", "", "Explicit end date (YYYY-MM-01 or YYYY-MM-DD)")
-		metricsFlag  = fs.String("metrics", "", "Comma-separated metrics (UnblendedCost, BlendedCost, AmortizedCost, NetUnblendedCost, NetAmortizedCost, or all)")
-		groupBy      = fs.String("group-by", "", "Grouping dimension(s), up to 2 comma-separated (SERVICE, LINKED_ACCOUNT, TAG:<Key>)")
-		minCost      = fs.Float64("min-cost", -1.0, "Minimum display cost threshold (e.g. 0.01)")
-		compareMoM   = fs.Bool("compare", false, "Compare Month-over-Month with preceding period")
-		failThresh   = fs.Float64("fail-on-threshold", -1.0, "Terminate with exit code 1 if total cost exceeds this threshold")
-		threshAlias  = fs.Float64("threshold", -1.0, "Alias for --fail-on-threshold")
-		format       = fs.String("format", "", "Output format: table, markdown, json, csv")
-		writeSummary = fs.Bool("write-summary", true, "Write markdown report to $GITHUB_STEP_SUMMARY when set")
-		mockMode     = fs.Bool("mock", false, "Run in offline mock mode with simulated billing data")
-		serverMode   = fs.Bool("server", false, "Run as an HTTP service daemon exposing /healthz and /report")
-		filterFlag   = fs.String("filter", "", "Filter services by comma-separated substring (e.g. DynamoDB,Lambda)")
-		serviceFlag  = fs.String("service", "", "Alias for --filter")
-		noColorFlag  = fs.Bool("no-color", false, "Disable ANSI color output in terminal tables")
-		outputFlag   = fs.String("output", "", "Optional file path to write report output")
-		outputSh     = fs.String("o", "", "Optional file path to write report output (shorthand)")
-		jsonSumFlag  = fs.String("json-summary", "", "Optional file path to write machine-readable summary JSON")
-		topFlag      = fs.Int("top", 0, "Show top N highest cost items and aggregate remainder into Other")
-		slackFlag    = fs.String("slack-webhook", "", "Incoming Slack webhook URL to post formatted cost report")
-		teamsFlag    = fs.String("teams-webhook", "", "Incoming Microsoft Teams webhook URL to post formatted cost report")
-		s3BucketFlag = fs.String("s3-bucket", "", "Optional S3 bucket name to upload cost report")
-		s3KeyFlag    = fs.String("s3-key", "", "Optional S3 object key when using --s3-bucket (e.g. 'reports/cost-report.md')")
-		currencyFlag = fs.String("currency", "", "Currency code (e.g. USD, EUR, GBP) to override auto-detected AWS billing currency")
-		nameFlag     = fs.String("name", "", "Human-readable name or alias for the AWS account (e.g. 'Production Core')")
-		nameAlias    = fs.String("account-name", "", "Alias for --name")
-		monthlyFlag  = fs.Bool("monthly", false, "Display multi-month historical breakdown with each month as a separate column")
-		trendFlag    = fs.Bool("trend", false, "Alias for --monthly")
-		monthlyBrk   = fs.Bool("monthly-breakdown", false, "Alias for --monthly")
-		mtdFlag      = fs.Bool("mtd", false, "Query Month-to-Date spend from the 1st of the current month up to today")
-		currMonthFlg = fs.Bool("current-month", false, "Alias for --mtd")
-		forecastFlag = fs.Bool("forecast", false, "Query AWS Cost Explorer projected month-end spend forecast and guardrail")
-		dailyFlag    = fs.Bool("daily", false, "Query daily spend granularity over the billing period")
-		granFlag     = fs.String("granularity", "", "Spend granularity: MONTHLY (default) or DAILY")
-		servicesFlag = fs.Bool("services", false, "List official AWS Cost Explorer service names")
-		listServFlag = fs.Bool("list-services", false, "Alias for --services")
+		configPath         = fs.String("config", "", "Path to YAML configuration file")
+		configPathSh       = fs.String("c", "", "Path to YAML configuration file (shorthand)")
+		showVersion        = fs.Bool("version", false, "Print version information and exit")
+		showVerSh          = fs.Bool("v", false, "Print version information and exit (shorthand)")
+		months             = fs.Int("months", 0, "Query historical full months back (default: 1)")
+		start              = fs.String("start", "", "Explicit start date (YYYY-MM-01)")
+		end                = fs.String("end", "", "Explicit end date (YYYY-MM-01 or YYYY-MM-DD)")
+		metricsFlag        = fs.String("metrics", "", "Comma-separated metrics (UnblendedCost, BlendedCost, AmortizedCost, NetUnblendedCost, NetAmortizedCost, or all)")
+		groupBy            = fs.String("group-by", "", "Grouping dimension(s), up to 2 comma-separated (SERVICE, LINKED_ACCOUNT, TAG:<Key>)")
+		minCost            = fs.Float64("min-cost", -1.0, "Minimum display cost threshold (e.g. 0.01)")
+		compareMoM         = fs.Bool("compare", false, "Compare Month-over-Month with preceding period")
+		failThresh         = fs.Float64("fail-on-threshold", -1.0, "Terminate with exit code 1 if total cost exceeds this threshold")
+		threshAlias        = fs.Float64("threshold", -1.0, "Alias for --fail-on-threshold")
+		format             = fs.String("format", "", "Output format: table, markdown, json, csv")
+		writeSummary       = fs.Bool("write-summary", true, "Write markdown report to $GITHUB_STEP_SUMMARY when set")
+		mockMode           = fs.Bool("mock", false, "Run in offline mock mode with simulated billing data")
+		serverMode         = fs.Bool("server", false, "Run as an HTTP service daemon exposing /healthz and /report")
+		filterFlag         = fs.String("filter", "", "Filter services by comma-separated substring (e.g. DynamoDB,Lambda)")
+		serviceFlag        = fs.String("service", "", "Alias for --filter")
+		noColorFlag        = fs.Bool("no-color", false, "Disable ANSI color output in terminal tables")
+		outputFlag         = fs.String("output", "", "Optional file path to write report output")
+		outputSh           = fs.String("o", "", "Optional file path to write report output (shorthand)")
+		jsonSumFlag        = fs.String("json-summary", "", "Optional file path to write machine-readable summary JSON")
+		topFlag            = fs.Int("top", 0, "Show top N highest cost items and aggregate remainder into Other")
+		slackFlag          = fs.String("slack-webhook", "", "Incoming Slack webhook URL to post formatted cost report")
+		teamsFlag          = fs.String("teams-webhook", "", "Incoming Microsoft Teams webhook URL to post formatted cost report")
+		s3BucketFlag       = fs.String("s3-bucket", "", "Optional S3 bucket name to upload cost report")
+		s3KeyFlag          = fs.String("s3-key", "", "Optional S3 object key when using --s3-bucket (e.g. 'reports/cost-report.md')")
+		currencyFlag       = fs.String("currency", "", "Currency code (e.g. USD, EUR, GBP) to override auto-detected AWS billing currency")
+		nameFlag           = fs.String("name", "", "Human-readable name or alias for the AWS account (e.g. 'Production Core')")
+		nameAlias          = fs.String("account-name", "", "Alias for --name")
+		monthlyFlag        = fs.Bool("monthly", false, "Display multi-month historical breakdown with each month as a separate column")
+		trendFlag          = fs.Bool("trend", false, "Alias for --monthly")
+		monthlyBrk         = fs.Bool("monthly-breakdown", false, "Alias for --monthly")
+		mtdFlag            = fs.Bool("mtd", false, "Query Month-to-Date spend from the 1st of the current month up to today")
+		currMonthFlg       = fs.Bool("current-month", false, "Alias for --mtd")
+		forecastFlag       = fs.Bool("forecast", false, "Query AWS Cost Explorer projected month-end spend forecast and guardrail")
+		dailyFlag          = fs.Bool("daily", false, "Query daily spend granularity over the billing period")
+		granFlag           = fs.String("granularity", "", "Spend granularity: MONTHLY (default) or DAILY")
+		servicesFlag       = fs.Bool("services", false, "List official AWS Cost Explorer service names")
+		listServFlag       = fs.Bool("list-services", false, "Alias for --services")
+		excludeCreditsFlag = fs.Bool("exclude-credits", false, "Exclude credits and refunds from billing calculations")
+		chargeTypeFlag     = fs.String("charge-type", "", "Comma-separated list of charge/record types (e.g. Usage,Tax,Credit,Refund)")
+		recordTypeFlag     = fs.String("record-type", "", "Alias for --charge-type")
 	)
 
 	var tagFlags tagFlagSlice
@@ -482,6 +487,37 @@ func LoadConfig(args []string) (*Config, error) {
 		cfg.Granularity = "DAILY"
 	}
 
+	if *excludeCreditsFlag {
+		cfg.ExcludeCredits = true
+	}
+
+	rawChargeType := *chargeTypeFlag
+	if rawChargeType == "" {
+		rawChargeType = *recordTypeFlag
+	}
+	if rawChargeType != "" {
+		parts := strings.Split(rawChargeType, ",")
+		var cleaned []string
+		for _, p := range parts {
+			t := normalizeChargeType(strings.TrimSpace(p))
+			if t != "" {
+				cleaned = append(cleaned, t)
+			}
+		}
+		if len(cleaned) > 0 {
+			cfg.ChargeTypes = cleaned
+		}
+	} else if len(cfg.ChargeTypes) > 0 {
+		var cleaned []string
+		for _, p := range cfg.ChargeTypes {
+			t := normalizeChargeType(strings.TrimSpace(p))
+			if t != "" {
+				cleaned = append(cleaned, t)
+			}
+		}
+		cfg.ChargeTypes = cleaned
+	}
+
 	if cfg.Monthly && cfg.MonthsBack <= 1 && *months == 0 {
 		cfg.MonthsBack = 12
 		cfg.Defaults.MonthsBack = 12
@@ -548,6 +584,30 @@ func LoadConfig(args []string) (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+func normalizeChargeType(s string) string {
+	lower := strings.ToLower(s)
+	switch lower {
+	case "usage":
+		return "Usage"
+	case "credit", "credits":
+		return "Credit"
+	case "refund", "refunds":
+		return "Refund"
+	case "tax", "taxes":
+		return "Tax"
+	case "upfront", "upfrontreservationfee":
+		return "UpfrontReservationFee"
+	case "recurring", "recurringreservationfee":
+		return "RecurringReservationFee"
+	case "support":
+		return "Support"
+	case "other":
+		return "Other"
+	default:
+		return s
+	}
 }
 
 // ExpandEnv replaces ${VAR} or ${VAR:-default} with values from the environment.

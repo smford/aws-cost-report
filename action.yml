@@ -54,6 +54,18 @@ inputs:
     description: 'Alias for tag'
     required: false
     default: ''
+  exclude-credits:
+    description: 'Exclude credits and refunds from billing calculations (true/false)'
+    required: false
+    default: 'false'
+  charge-type:
+    description: 'Filter costs by charge/record type (e.g. Usage,Tax,Credit,Refund)'
+    required: false
+    default: ''
+  record-type:
+    description: 'Alias for charge-type'
+    required: false
+    default: ''
   threshold:
     description: 'Budget alert threshold amount (e.g. 500.00). Alerts in Step Summary and fails step if exceeded.'
     required: false
@@ -344,6 +356,16 @@ runs:
 
         if [ "${{ inputs.daily }}" = "true" ]; then
           ARGS+=("--daily")
+        fi
+
+        if [ "${{ inputs.exclude-credits }}" = "true" ]; then
+          ARGS+=("--exclude-credits")
+        fi
+
+        if [ -n "${{ inputs.charge-type }}" ]; then
+          ARGS+=("--charge-type=${{ inputs.charge-type }}")
+        elif [ -n "${{ inputs.record-type }}" ]; then
+          ARGS+=("--charge-type=${{ inputs.record-type }}")
         fi
 
         REPORT_TMP="${RUNNER_TEMP:-/tmp}/aws-cost-report-output.txt"

@@ -39,6 +39,11 @@ func RenderMarkdown(w io.Writer, r *awsclient.CostReport, writeJobSummary bool, 
 	if r.Metadata.TagFilter != "" {
 		b.WriteString(fmt.Sprintf("| **Tag Filter** | `%s` |\n", r.Metadata.TagFilter))
 	}
+	if r.Metadata.ChargeTypeFilter != "" {
+		b.WriteString(fmt.Sprintf("| **Charge Types** | `%s` |\n", r.Metadata.ChargeTypeFilter))
+	} else if r.Metadata.ExcludeCredits {
+		b.WriteString("| **Credits / Refunds** | `Excluded` |\n")
+	}
 	b.WriteString(fmt.Sprintf("| **Active Line Items** | %d |\n\n", r.Metadata.ActiveServices))
 
 	// Total Metrics Table
@@ -216,6 +221,11 @@ func renderMonthlyMarkdown(w io.Writer, r *awsclient.CostReport, writeJobSummary
 	b.WriteString(fmt.Sprintf("| **Status** | `%s` |\n", r.Metadata.EstimatedOrFinal))
 	if r.Metadata.TagFilter != "" {
 		b.WriteString(fmt.Sprintf("| **Tag Filter** | `%s` |\n", r.Metadata.TagFilter))
+	}
+	if r.Metadata.ChargeTypeFilter != "" {
+		b.WriteString(fmt.Sprintf("| **Charge Types** | `%s` |\n", r.Metadata.ChargeTypeFilter))
+	} else if r.Metadata.ExcludeCredits {
+		b.WriteString("| **Credits / Refunds** | `Excluded` |\n")
 	}
 	b.WriteString(fmt.Sprintf("| **Active Line Items** | %d |\n", len(mb.Items)))
 	b.WriteString(fmt.Sprintf("| **Grand Total** | **%s%.2f %s** |\n\n", sym, mb.GrandTotal, r.Metadata.Currency))

@@ -197,6 +197,8 @@ func (c *Client) GenerateReport(ctx context.Context, cfg *config.Config, now tim
 			ActiveServices:   len(currentItems),
 			GroupKey:         getReportGroupKey(cfg),
 			TagFilter:        cfg.TagFilters.Format(),
+			ChargeTypeFilter: strings.Join(cfg.ChargeTypes, ", "),
+			ExcludeCredits:   cfg.ExcludeCredits,
 		},
 		Totals:           currentTotals,
 		Items:            currentItems,
@@ -524,33 +526,7 @@ func (c *Client) fetchCostData(ctx context.Context, cfg *config.Config, dateRang
 	monthTotalsMap := make(map[string]float64)
 	itemMonthlyCosts := make(map[string]map[string]float64)
 
-	var filterExpr *cetypes.Expression
-	if len(cfg.TagFilters) > 0 {
-		var tagExprs []cetypes.Expression
-		var sortedKeys []string
-		for k := range cfg.TagFilters {
-			sortedKeys = append(sortedKeys, k)
-		}
-		sort.Strings(sortedKeys)
-
-		for _, k := range sortedKeys {
-			vals := cfg.TagFilters[k]
-			tagExprs = append(tagExprs, cetypes.Expression{
-				Tags: &cetypes.TagValues{
-					Key:    aws.String(k),
-					Values: vals,
-				},
-			})
-		}
-
-		if len(tagExprs) == 1 {
-			filterExpr = &tagExprs[0]
-		} else if len(tagExprs) > 1 {
-			filterExpr = &cetypes.Expression{
-				And: tagExprs,
-			}
-		}
-	}
+	filterExpr := buildFilterExpression(cfg)
 
 	for {
 		input := &costexplorer.GetCostAndUsageInput{
@@ -894,6 +870,42 @@ func GenerateMockReport(cfg *config.Config, now time.Time) (*CostReport, error) 
 		}
 	}
 
+	if cfg.ExcludeCredits {
+		var noCredits []LineItem
+		for _, item := range filtered {
+			if strings.EqualFold(item.Name, "Credit") || strings.EqualFold(item.Name, "Refund") || strings.Contains(strings.ToLower(item.Name), "credit") {
+				continue
+			}
+			noCredits = append(noCredits, item)
+		}
+		filtered = noCredits
+	}
+
+	if len(cfg.ChargeTypes) > 0 {
+		var chargeFiltered []LineItem
+		for _, item := range filtered {
+			matched := false
+			for _, ct := range cfg.ChargeTypes {
+				if strings.EqualFold(ct, "Tax") && strings.EqualFold(item.Name, "Tax") {
+					matched = true
+					break
+				}
+				if strings.EqualFold(ct, "Usage") && !strings.EqualFold(item.Name, "Tax") && !strings.Contains(strings.ToLower(item.Name), "credit") {
+					matched = true
+					break
+				}
+				if strings.EqualFold(ct, "Credit") && strings.Contains(strings.ToLower(item.Name), "credit") {
+					matched = true
+					break
+				}
+			}
+			if matched {
+				chargeFiltered = append(chargeFiltered, item)
+			}
+		}
+		filtered = chargeFiltered
+	}
+
 	totals := TotalCosts{
 		BlendedCost:       21.59,
 		UnblendedCost:     21.58,
@@ -912,7 +924,7 @@ func GenerateMockReport(cfg *config.Config, now time.Time) (*CostReport, error) 
 		totals.PrevNetAmortizedCost = 19.02
 	}
 
-	if len(cfg.Filters) > 0 || len(cfg.TagFilters) > 0 {
+	if len(cfg.Filters) > 0 || len(cfg.TagFilters) > 0 || len(cfg.ChargeTypes) > 0 || cfg.ExcludeCredits {
 		var uCost, bCost, aCost, nuCost, naCost, prevUCost, prevBCost, prevACost, prevNUCost, prevNACost float64
 		for _, it := range filtered {
 			uCost += it.UnblendedCost
@@ -1006,6 +1018,8 @@ func GenerateMockReport(cfg *config.Config, now time.Time) (*CostReport, error) 
 			ActiveServices:   len(filtered),
 			GroupKey:         getReportGroupKey(cfg),
 			TagFilter:        cfg.TagFilters.Format(),
+			ChargeTypeFilter: strings.Join(cfg.ChargeTypes, ", "),
+			ExcludeCredits:   cfg.ExcludeCredits,
 		},
 		Totals:        totals,
 		Items:         filtered,
@@ -1371,6 +1385,7 @@ func (c *Client) fetchCostForecast(ctx context.Context, cfg *config.Config, now 
 			End:   aws.String(endStr),
 		},
 		PredictionIntervalLevel: &predictionInterval,
+		Filter:                  buildFilterExpression(cfg),
 	}
 
 	output, err := c.getCostForecastWithRetry(ctx, input)
@@ -1551,4 +1566,62 @@ func formatGroupKeys(keys []string, groupings []config.GroupingConfig, accounts 
 		return fmt.Sprintf("[%s=%s] [%s=%s]", groupings[0].Key, val0, groupings[1].Key, val1)
 	}
 	return fmt.Sprintf("%s - %s", val0, val1)
+}
+
+func buildFilterExpression(cfg *config.Config) *cetypes.Expression {
+	var andExpressions []cetypes.Expression
+
+	if len(cfg.TagFilters) > 0 {
+		var tagExprs []cetypes.Expression
+		var sortedKeys []string
+		for k := range cfg.TagFilters {
+			sortedKeys = append(sortedKeys, k)
+		}
+		sort.Strings(sortedKeys)
+
+		for _, k := range sortedKeys {
+			vals := cfg.TagFilters[k]
+			tagExprs = append(tagExprs, cetypes.Expression{
+				Tags: &cetypes.TagValues{
+					Key:    aws.String(k),
+					Values: vals,
+				},
+			})
+		}
+
+		if len(tagExprs) == 1 {
+			andExpressions = append(andExpressions, tagExprs[0])
+		} else if len(tagExprs) > 1 {
+			andExpressions = append(andExpressions, cetypes.Expression{
+				And: tagExprs,
+			})
+		}
+	}
+
+	if len(cfg.ChargeTypes) > 0 {
+		andExpressions = append(andExpressions, cetypes.Expression{
+			Dimensions: &cetypes.DimensionValues{
+				Key:    cetypes.DimensionRecordType,
+				Values: cfg.ChargeTypes,
+			},
+		})
+	} else if cfg.ExcludeCredits {
+		andExpressions = append(andExpressions, cetypes.Expression{
+			Not: &cetypes.Expression{
+				Dimensions: &cetypes.DimensionValues{
+					Key:    cetypes.DimensionRecordType,
+					Values: []string{"Credit", "Refund"},
+				},
+			},
+		})
+	}
+
+	if len(andExpressions) == 1 {
+		return &andExpressions[0]
+	} else if len(andExpressions) > 1 {
+		return &cetypes.Expression{
+			And: andExpressions,
+		}
+	}
+	return nil
 }

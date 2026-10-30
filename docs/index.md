@@ -54,6 +54,8 @@ jobs:
 | `group-by` | Grouping dimension(s), up to 2 comma-separated (`SERVICE`, `LINKED_ACCOUNT`, `TAG:<Key>`) | `SERVICE` |
 | `name` | Human-readable name or alias for the AWS account (e.g. `Production Core`) | `""` |
 | `tag` | Filter costs by AWS Cost Allocation Tag (e.g. `Environment=Production`) | `""` |
+| `exclude-credits` | Exclude promotional credits and refunds (`true`/`false`) | `false` |
+| `charge-type` | Filter costs by charge/record type (e.g. `Usage,Tax`, `Credit`) | `""` |
 | `threshold` | Budget threshold dollar amount | `""` |
 | `fail-on-threshold` | Fail step if budget threshold exceeded | `true` |
 | `top` | Show top N highest cost items and aggregate remainder into Other | `""` |

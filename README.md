@@ -436,6 +436,20 @@ aws-cost-report generate --compare --metrics="UnblendedCost,NetUnblendedCost,Net
 aws-cost-report generate --compare --metrics=all
 ```
 
+### 20. Charge Type Filtering & Excluding Credits (`--charge-type`, `--exclude-credits`)
+Filter AWS line items by charge/record type or exclude promotional credits and refunds from Month-over-Month calculations:
+
+```bash
+# Exclude AWS promotional credits and refunds:
+aws-cost-report generate --compare --exclude-credits
+
+# Isolate operational usage and tax:
+aws-cost-report generate --compare --charge-type="Usage,Tax"
+
+# Audit upfront reservation and savings plan fees:
+aws-cost-report generate --compare --charge-type="UpfrontReservationFee"
+```
+
 ---
 
 ## GitHub Action
@@ -490,6 +504,9 @@ jobs:
 | `filter` | Comma-separated substring filter for services (e.g. `DynamoDB,Lambda`) | `""` | No |
 | `tag` | Filter costs by AWS Cost Allocation Tag (e.g. `Environment=Production` or `Environment=Prod,Stage`) | `""` | No |
 | `tag-filter` | Alias for `tag` | `""` | No |
+| `exclude-credits` | Exclude promotional credits and refunds (`true`/`false`) | `false` | No |
+| `charge-type` | Filter costs by charge/record type (e.g. `Usage,Tax`, `Credit`) | `""` | No |
+| `record-type` | Alias for `charge-type` | `""` | No |
 | `threshold` | SRE budget alert dollar threshold (e.g. `500.00`). Exceeding fails the step. | `""` | No |
 | `fail-on-threshold` | Whether to terminate step with failure on threshold breach (`true`/`false`) | `true` | No |
 | `min-cost` | Minimum cost floor to display in itemized breakdown | `""` | No |

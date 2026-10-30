@@ -39,6 +39,11 @@ func RenderTable(w io.Writer, r *awsclient.CostReport, noColor bool) error {
 	if r.Metadata.TagFilter != "" {
 		b.WriteString(fmt.Sprintf(" Tag Filter:         %s\n", r.Metadata.TagFilter))
 	}
+	if r.Metadata.ChargeTypeFilter != "" {
+		b.WriteString(fmt.Sprintf(" Charge Types:       %s\n", r.Metadata.ChargeTypeFilter))
+	} else if r.Metadata.ExcludeCredits {
+		b.WriteString(" Credits / Refunds:  Excluded\n")
+	}
 	groupLabel := "Services"
 	if r.Metadata.GroupKey != "" && !strings.EqualFold(r.Metadata.GroupKey, "SERVICE") {
 		groupLabel = r.Metadata.GroupKey
@@ -263,6 +268,11 @@ func renderMonthlyTable(w io.Writer, r *awsclient.CostReport, noColor bool) erro
 	b.WriteString(fmt.Sprintf(" Estimated / Final:  %s\n", r.Metadata.EstimatedOrFinal))
 	if r.Metadata.TagFilter != "" {
 		b.WriteString(fmt.Sprintf(" Tag Filter:         %s\n", r.Metadata.TagFilter))
+	}
+	if r.Metadata.ChargeTypeFilter != "" {
+		b.WriteString(fmt.Sprintf(" Charge Types:       %s\n", r.Metadata.ChargeTypeFilter))
+	} else if r.Metadata.ExcludeCredits {
+		b.WriteString(" Credits / Refunds:  Excluded\n")
 	}
 	groupLabel := "Services"
 	if r.Metadata.GroupKey != "" && !strings.EqualFold(r.Metadata.GroupKey, "SERVICE") {

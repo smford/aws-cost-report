@@ -1068,3 +1068,82 @@ func TestDailyMockReport(t *testing.T) {
 		t.Errorf("expected TopDriverName to be populated, got %+v", firstDay)
 	}
 }
+
+func TestBuildFilterExpression(t *testing.T) {
+	// 1. No filters -> nil
+	cfgEmpty := config.DefaultConfig()
+	if expr := buildFilterExpression(cfgEmpty); expr != nil {
+		t.Errorf("expected nil expression, got %+v", expr)
+	}
+
+	// 2. Tag filter only
+	cfgTag := config.DefaultConfig()
+	cfgTag.TagFilters["Environment"] = []string{"Production"}
+	exprTag := buildFilterExpression(cfgTag)
+	if exprTag == nil || exprTag.Tags == nil {
+		t.Fatalf("expected single tag expression, got %+v", exprTag)
+	}
+	if *exprTag.Tags.Key != "Environment" || exprTag.Tags.Values[0] != "Production" {
+		t.Errorf("unexpected tag values: %+v", exprTag.Tags)
+	}
+
+	// 3. Charge type filter
+	cfgCharge := config.DefaultConfig()
+	cfgCharge.ChargeTypes = []string{"Usage", "Tax"}
+	exprCharge := buildFilterExpression(cfgCharge)
+	if exprCharge == nil || exprCharge.Dimensions == nil {
+		t.Fatalf("expected dimensions expression, got %+v", exprCharge)
+	}
+	if exprCharge.Dimensions.Key != "RECORD_TYPE" || len(exprCharge.Dimensions.Values) != 2 {
+		t.Errorf("unexpected dimension values: %+v", exprCharge.Dimensions)
+	}
+
+	// 4. Exclude credits
+	cfgExclude := config.DefaultConfig()
+	cfgExclude.ExcludeCredits = true
+	exprExclude := buildFilterExpression(cfgExclude)
+	if exprExclude == nil || exprExclude.Not == nil || exprExclude.Not.Dimensions == nil {
+		t.Fatalf("expected Not(Dimensions) expression, got %+v", exprExclude)
+	}
+	if exprExclude.Not.Dimensions.Key != "RECORD_TYPE" {
+		t.Errorf("expected RECORD_TYPE key, got %v", exprExclude.Not.Dimensions.Key)
+	}
+
+	// 5. Combined Tag + ChargeType
+	cfgCombined := config.DefaultConfig()
+	cfgCombined.TagFilters["Project"] = []string{"Billing"}
+	cfgCombined.ChargeTypes = []string{"Usage"}
+	exprCombined := buildFilterExpression(cfgCombined)
+	if exprCombined == nil || len(exprCombined.And) != 2 {
+		t.Fatalf("expected And expression with 2 clauses, got %+v", exprCombined)
+	}
+}
+
+func TestMockReportChargeTypeAndExcludeCredits(t *testing.T) {
+	refTime := time.Date(2026, time.October, 29, 12, 0, 0, 0, time.UTC)
+
+	// 1. Charge type Tax only
+	cfgTax := config.DefaultConfig()
+	cfgTax.ChargeTypes = []string{"Tax"}
+	repTax, err := GenerateMockReport(cfgTax, refTime)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if repTax.Metadata.ChargeTypeFilter != "Tax" {
+		t.Errorf("expected ChargeTypeFilter='Tax', got %q", repTax.Metadata.ChargeTypeFilter)
+	}
+	if len(repTax.Items) != 1 || repTax.Items[0].Name != "Tax" {
+		t.Errorf("expected only Tax item, got %+v", repTax.Items)
+	}
+
+	// 2. Exclude credits
+	cfgEx := config.DefaultConfig()
+	cfgEx.ExcludeCredits = true
+	repEx, err := GenerateMockReport(cfgEx, refTime)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !repEx.Metadata.ExcludeCredits {
+		t.Errorf("expected ExcludeCredits=true in metadata")
+	}
+}
