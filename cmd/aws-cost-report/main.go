@@ -482,6 +482,11 @@ func runCLI(cfg *config.Config, stdout, stderr io.Writer) int {
 			forecastBreached = report.Forecast.ThresholdBreached
 		}
 
+		periodStr := ""
+		if report.Metadata.PeriodStart != "" && report.Metadata.PeriodEnd != "" {
+			periodStr = fmt.Sprintf("%s to %s", report.Metadata.PeriodStart, report.Metadata.PeriodEnd)
+		}
+
 		summary := struct {
 			TotalCost         float64 `json:"total_cost"`
 			PreviousCost      float64 `json:"previous_cost"`
@@ -492,6 +497,10 @@ func runCLI(cfg *config.Config, stdout, stderr io.Writer) int {
 			ThresholdBreached bool    `json:"threshold_breached"`
 			ForecastAmount    float64 `json:"forecast_amount,omitempty"`
 			ForecastBreached  bool    `json:"forecast_breached,omitempty"`
+			PeriodStart       string  `json:"period_start,omitempty"`
+			PeriodEnd         string  `json:"period_end,omitempty"`
+			Period            string  `json:"period,omitempty"`
+			BillingMonth      string  `json:"billing_month,omitempty"`
 		}{
 			TotalCost:         report.Totals.UnblendedCost,
 			PreviousCost:      report.Totals.PrevUnblendedCost,
@@ -502,6 +511,10 @@ func runCLI(cfg *config.Config, stdout, stderr io.Writer) int {
 			ThresholdBreached: thresholdBreached,
 			ForecastAmount:    forecastAmount,
 			ForecastBreached:  forecastBreached,
+			PeriodStart:       report.Metadata.PeriodStart,
+			PeriodEnd:         report.Metadata.PeriodEnd,
+			Period:            periodStr,
+			BillingMonth:      report.Metadata.BillingMonth,
 		}
 
 		if data, err := json.MarshalIndent(summary, "", "  "); err == nil {

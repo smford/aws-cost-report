@@ -601,10 +601,14 @@ jobs:
 
 | Output | Description | Example |
 |:---|:---|:---|
+| `billing-month` | Billing month descriptor | `September 2026` |
 | `cost-delta` | Absolute dollar difference (`total - previous`) | `0.45` |
 | `cost-delta-pct` | Percentage change in total cost | `2.13` |
 | `forecast-amount` | Projected month-end spend amount if `--forecast` enabled | `28.50` |
 | `forecast-breached` | `true` if projected month-end spend breached `threshold` | `false` |
+| `period` | Formatted date period range | `2026-09-01 to 2026-09-30` |
+| `period-end` | Inclusive end date of report period | `2026-09-30` |
+| `period-start` | Start date of report period | `2026-09-01` |
 | `previous-cost` | Preceding period total unblended cost | `21.13` |
 | `report` | Full formatted cost report string | Multi-line table/markdown |
 | `report-file` | Destination file path if `output-file` was set | `./cost-report.md` |

@@ -187,6 +187,18 @@ outputs:
   report-file:
     description: 'File path where the report was saved if output-file was specified'
     value: ${{ steps.run-report.outputs.report_file }}
+  period:
+    description: 'The reported on date period (e.g. 2026-09-01 to 2026-09-30)'
+    value: ${{ steps.run-report.outputs.period }}
+  period-start:
+    description: 'Start date of the reported period (YYYY-MM-DD)'
+    value: ${{ steps.run-report.outputs.period_start }}
+  period-end:
+    description: 'Inclusive end date of the reported period (YYYY-MM-DD)'
+    value: ${{ steps.run-report.outputs.period_end }}
+  billing-month:
+    description: 'Billing month descriptor (e.g. September 2026)'
+    value: ${{ steps.run-report.outputs.billing_month }}
 
 runs:
   using: 'composite'
@@ -247,7 +259,7 @@ runs:
           if [ -n "$RESOLVED_TAG" ] && [[ "$RESOLVED_TAG" =~ ^v[0-9]+ ]]; then
             VERSION="$RESOLVED_TAG"
           else
-            VERSION="v0.7.0"
+            VERSION="v0.13.0"
           fi
         fi
         VER_NUM="${VERSION#v}"
@@ -449,6 +461,11 @@ runs:
         } >> "$GITHUB_OUTPUT"
 
         # Populate structured output metrics
+        PERIOD=""
+        PERIOD_START=""
+        PERIOD_END=""
+        BILLING_MONTH=""
+
         if [ -f "$SUMMARY_TMP" ]; then
           TOTAL_COST=$(jq -r '.total_cost // "0.00"' "$SUMMARY_TMP")
           PREV_COST=$(jq -r '.previous_cost // "0.00"' "$SUMMARY_TMP")
@@ -464,6 +481,10 @@ runs:
           FORECAST_BREACHED=$(jq -r '.forecast_breached // false' "$SUMMARY_TMP")
           echo "forecast_amount=${FORECAST_AMOUNT}" >> "$GITHUB_OUTPUT"
           echo "forecast_breached=${FORECAST_BREACHED}" >> "$GITHUB_OUTPUT"
+          PERIOD_START=$(jq -r '.period_start // ""' "$SUMMARY_TMP")
+          PERIOD_END=$(jq -r '.period_end // ""' "$SUMMARY_TMP")
+          BILLING_MONTH=$(jq -r '.billing_month // ""' "$SUMMARY_TMP")
+          PERIOD=$(jq -r '.period // ""' "$SUMMARY_TMP")
         else
           if [ -n "${{ inputs.threshold }}" ] && [ "$EXIT_CODE" -ne 0 ]; then
             echo "threshold_breached=true" >> "$GITHUB_OUTPUT"
@@ -471,6 +492,35 @@ runs:
             echo "threshold_breached=false" >> "$GITHUB_OUTPUT"
           fi
         fi
+
+        # Fallback period extraction from report text if not populated by summary JSON
+        if [ -z "$PERIOD" ]; then
+          if [ -n "$PERIOD_START" ] && [ -n "$PERIOD_END" ]; then
+            PERIOD="${PERIOD_START} to ${PERIOD_END}"
+          else
+            PARSED_PERIOD=$(grep -E '\|[[:space:]]*\*\*Period\*\*[[:space:]]*\|' "$REPORT_TMP" 2>/dev/null | head -n1 | sed -E 's/.*\|[[:space:]]*\*\*Period\*\*[[:space:]]*\|[[:space:]]*([^|(]+).*/\1/' | sed -e 's/[[:space:]]*$//')
+            if [ -z "$PARSED_PERIOD" ]; then
+              PARSED_PERIOD=$(grep -E '^[[:space:]]*Period:[[:space:]]*' "$REPORT_TMP" 2>/dev/null | head -n1 | sed -E 's/^[[:space:]]*Period:[[:space:]]*([^(\n]+).*/\1/' | sed -e 's/[[:space:]]*$//')
+            fi
+            if [ -n "$PARSED_PERIOD" ]; then
+              PERIOD="$PARSED_PERIOD"
+              PERIOD_START=$(echo "$PARSED_PERIOD" | awk '{print $1}')
+              PERIOD_END=$(echo "$PARSED_PERIOD" | awk '{print $3}')
+            fi
+          fi
+        fi
+
+        if [ -z "$BILLING_MONTH" ]; then
+          BILLING_MONTH=$(grep -E '\|[[:space:]]*\*\*Billing Month\*\*[[:space:]]*\|' "$REPORT_TMP" 2>/dev/null | head -n1 | sed -E 's/.*\|[[:space:]]*\*\*Billing Month\*\*[[:space:]]*\|[[:space:]]*([^|]+).*/\1/' | sed -e 's/[[:space:]]*$//')
+          if [ -z "$BILLING_MONTH" ]; then
+            BILLING_MONTH=$(grep -E '^[[:space:]]*Billing Month:[[:space:]]*' "$REPORT_TMP" 2>/dev/null | head -n1 | sed -E 's/^[[:space:]]*Billing Month:[[:space:]]*([^\n]+).*/\1/' | sed -e 's/[[:space:]]*$//')
+          fi
+        fi
+
+        echo "period=${PERIOD}" >> "$GITHUB_OUTPUT"
+        echo "period_start=${PERIOD_START}" >> "$GITHUB_OUTPUT"
+        echo "period_end=${PERIOD_END}" >> "$GITHUB_OUTPUT"
+        echo "billing_month=${BILLING_MONTH}" >> "$GITHUB_OUTPUT"
 
         # Check exit behavior for threshold breaches
         if [ "$EXIT_CODE" -ne 0 ]; then

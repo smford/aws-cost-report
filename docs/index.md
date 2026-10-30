@@ -70,7 +70,7 @@ jobs:
 | `s3-bucket` | Target AWS S3 bucket name for saving report output | `""` |
 | `s3-key` | Optional S3 object key prefix/path | `""` |
 
-Outputs include `report`, `total-cost`, `previous-cost`, `cost-delta`, `cost-delta-pct`, and `threshold-breached`.
+Outputs include `report`, `total-cost`, `previous-cost`, `cost-delta`, `cost-delta-pct`, `threshold-breached`, `period`, `period-start`, `period-end`, and `billing-month`.
 
 ---
 

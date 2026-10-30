@@ -189,6 +189,15 @@ func TestRunCLIMockMode(t *testing.T) {
 	if !strings.Contains(string(jsonData), `"threshold_breached": false`) {
 		t.Errorf("expected threshold_breached false in json summary")
 	}
+	if !strings.Contains(string(jsonData), `"period_start": "2026-09-01"`) {
+		t.Errorf("expected period_start in json summary, got: %s", string(jsonData))
+	}
+	if !strings.Contains(string(jsonData), `"period_end": "2026-09-30"`) {
+		t.Errorf("expected period_end in json summary, got: %s", string(jsonData))
+	}
+	if !strings.Contains(string(jsonData), `"period": "2026-09-01 to 2026-09-30"`) {
+		t.Errorf("expected period in json summary, got: %s", string(jsonData))
+	}
 }
 
 func TestRunCLIMockModeWithTagFilter(t *testing.T) {
