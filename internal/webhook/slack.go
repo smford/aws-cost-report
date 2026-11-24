@@ -41,6 +41,11 @@ func SendSlackNotification(ctx context.Context, webhookURL string, report *awscl
 		fallbackTitle = fmt.Sprintf("🚨 AWS Budget Alert: Spending (%s%.2f) exceeds threshold (%s%.2f)!", sym, report.Totals.UnblendedCost, sym, threshold)
 	}
 
+	accountText := fmt.Sprintf("*Account ID:*\n`%s`", report.Metadata.AccountID)
+	if report.Metadata.AccountName != "" {
+		accountText = fmt.Sprintf("*Account:*\n`%s` (%s)", report.Metadata.AccountID, report.Metadata.AccountName)
+	}
+
 	blocks := []SlackBlock{
 		{
 			Type: "header",
@@ -49,7 +54,7 @@ func SendSlackNotification(ctx context.Context, webhookURL string, report *awscl
 		{
 			Type: "section",
 			Fields: []*SlackText{
-				{Type: "mrkdwn", Text: fmt.Sprintf("*Account ID:*\n`%s`", report.Metadata.AccountID)},
+				{Type: "mrkdwn", Text: accountText},
 				{Type: "mrkdwn", Text: fmt.Sprintf("*Billing Month:*\n%s", report.Metadata.BillingMonth)},
 				{Type: "mrkdwn", Text: fmt.Sprintf("*Period:*\n%s to %s", report.Metadata.PeriodStart, report.Metadata.PeriodEnd)},
 				{Type: "mrkdwn", Text: fmt.Sprintf("*Total Unblended:*\n*%s%.2f %s*", sym, report.Totals.UnblendedCost, report.Metadata.Currency)},

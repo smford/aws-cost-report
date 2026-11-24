@@ -126,7 +126,7 @@ _aws_cost_report() {
                         '--forecast[Query AWS Cost Explorer projected month-end spend forecast and guardrail]' \
                         '--monthly[Display multi-month historical breakdown with each month as a separate column]' \
                         '--trend[Alias for --monthly]' \
-                        '--format[Output format]:format:(table markdown html json csv prometheus)' \
+                        '--format[Output format]:format:(table markdown html json csv prometheus minimal)' \
                         '--months[Number of historical complete months back to query]:months:' \
                         '--start[Explicit billing start date (inclusive)]:date:' \
                         '--end[Explicit billing end date (inclusive)]:date:' \
@@ -204,7 +204,7 @@ complete -c aws-cost-report -l granularity -x -a "MONTHLY DAILY" -d "Spend granu
 complete -c aws-cost-report -l forecast -d "Query AWS Cost Explorer projected month-end spend forecast and guardrail"
 complete -c aws-cost-report -l monthly -d "Display multi-month historical breakdown in column format"
 complete -c aws-cost-report -l trend -d "Alias for --monthly"
-complete -c aws-cost-report -l format -x -a "table markdown html json csv prometheus" -d "Output format"
+complete -c aws-cost-report -l format -x -a "table markdown html json csv prometheus minimal" -d "Output format"
 complete -c aws-cost-report -l group-by -x -a "SERVICE LINKED_ACCOUNT REGION" -d "Grouping dimension"
 complete -c aws-cost-report -l region -d "Filter costs by AWS regions"
 complete -c aws-cost-report -l filter-region -d "Alias for --region"

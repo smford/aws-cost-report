@@ -724,6 +724,11 @@ func TestConfigValidation(t *testing.T) {
 			args:        []string{"--format", "markdown", "--granularity", "DAILY", "--months", "3", "--top", "5", "--threshold", "100.0", "--min-cost", "0.05", "--start", "2026-09-01", "--end", "2026-10-01", "--group-by", "SERVICE,TAG:Environment"},
 			expectError: "",
 		},
+		{
+			name:        "valid minimal format",
+			args:        []string{"--format", "minimal"},
+			expectError: "",
+		},
 	}
 
 	for _, tt := range tests {

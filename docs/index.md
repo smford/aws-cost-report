@@ -49,7 +49,7 @@ jobs:
 |:---|:---|:---:|
 | `version` | Target binary release version (e.g. `v0.7.0` or `latest`) | `latest` |
 | `compare` | Enable Month-over-Month comparison | `true` |
-| `format` | Output format (`markdown`, `table`, `json`, `csv`) | `markdown` |
+| `format` | Output format (`markdown`, `table`, `html`, `json`, `csv`, `prometheus`, `minimal`) | `markdown` |
 | `filter` | Filter services by official name, alias, or substring | `""` |
 | `group-by` | Grouping dimension(s), up to 2 comma-separated (`SERVICE`, `LINKED_ACCOUNT`, `TAG:<Key>`) | `SERVICE` |
 | `name` | Human-readable name or alias for the AWS account (e.g. `Production Core`) | `""` |
@@ -241,6 +241,52 @@ curl http://localhost:8080/metrics
 
 # Or export metrics directly via CLI
 aws-cost-report generate --format=prometheus
+```
+
+---
+
+## Minimal & Compact Format (`--format=minimal`)
+
+A high-density, compact output engine designed for automated notifications, chat webhooks, CI/CD step logs, and mobile screens.
+
+### Purpose & Features
+- **Eliminates Whitespace Waste**: Keeps table row width under 45 characters, completely preventing horizontal scrolling or line-wrapping on mobile devices.
+- **Surfaces Key Context**: Displays billing period, account ID with optional account name, previous month's total spend, and Month-over-Month change.
+- **Cost Increase Alerts**: Automatically isolates and highlights the top services with significant MoM cost jumps.
+- **Filters Non-Service Noise**: Excludes non-infrastructure items (such as invoice tax) from the services breakdown so only actual AWS cloud resources are listed.
+- **Pareto Aggregation**: Displays the top 5 spenders and cleanly aggregates the long tail into `Other (N svcs)`.
+- **Ultra-Compact Footprint**: Weighs in at ~600–800 characters total, easily fitting within single-message chat limits.
+
+```bash
+# Generate minimal report with comparison and account name:
+aws-cost-report generate --compare --format=minimal --account-name="Production Core"
+```
+
+**Example Output:**
+```text
+*AWS Billing Report — October 2026*
+*Account:* `715195480427` (Production Core)
+*Period:* 2026-10-01 to 2026-10-31 (Finalized)
+*Total Spend:* *$21.58 USD* (prev: $21.13)
+*MoM Change:* *+2.13%* (+$0.45)
+
+*Cost Increases:*
+• *Amazon DynamoDB*: $5.51 (+$0.31 / +5.96%)
+• *AWS Lambda*: $0.25 (+$0.07 / +38.89%)
+• *Amazon Simple Storage S...*: $0.94 (+$0.06 / +6.82%)
+
+```
+Services (Top 5)      Spend      Diff       %
+---------------------------------------------
+Amazon DynamoDB       $5.51    +$0.31   +6.0%
+AWS Config            $4.73    -$0.07   -1.5%
+Amazon Cognito        $4.17    +$0.02   +0.5%
+AWS Key Managem...    $1.00     $0.00    0.0%
+Amazon Simple S...    $0.94    +$0.06   +6.8%
+Other (8 svcs)        $2.34    +$0.04   +1.7%
+---------------------------------------------
+Total                $21.58    +$0.45   +2.1%
+```
 ```
 
 ---

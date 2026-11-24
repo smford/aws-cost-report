@@ -414,6 +414,34 @@ curl http://localhost:8080/metrics
 # Or export directly via CLI:
 aws-cost-report generate --format=prometheus</code></pre>
 
+      <h3>Compact &amp; Minimal Format (<code>--format=minimal</code>)</h3>
+      <p>A high-density, compact output engine designed for automated notifications, chat webhooks, CI/CD step logs, and mobile screens. It eliminates wasteful whitespace (keeping row width &le; 45 characters), surfaces MoM cost increases, excludes non-service lines like tax, and rolls up long tails into a clean top-5 table:</p>
+      <pre><code># Generate minimal report with comparison and account name:
+aws-cost-report generate --compare --format=minimal --account-name="Production Core"</code></pre>
+      <pre><code>*AWS Billing Report — October 2026*
+*Account:* `715195480427` (Production Core)
+*Period:* 2026-10-01 to 2026-10-31 (Finalized)
+*Total Spend:* *$21.58 USD* (prev: $21.13)
+*MoM Change:* *+2.13%* (+$0.45)
+
+*Cost Increases:*
+• *Amazon DynamoDB*: $5.51 (+$0.31 / +5.96%)
+• *AWS Lambda*: $0.25 (+$0.07 / +38.89%)
+• *Amazon Simple Storage S...*: $0.94 (+$0.06 / +6.82%)
+
+```
+Services (Top 5)      Spend      Diff       %
+---------------------------------------------
+Amazon DynamoDB       $5.51    +$0.31   +6.0%
+AWS Config            $4.73    -$0.07   -1.5%
+Amazon Cognito        $4.17    +$0.02   +0.5%
+AWS Key Managem...    $1.00     $0.00    0.0%
+Amazon Simple S...    $0.94    +$0.06   +6.8%
+Other (8 svcs)        $2.34    +$0.04   +1.7%
+---------------------------------------------
+Total                $21.58    +$0.45   +2.1%
+```</code></pre>
+
       <h3>Budget Guardrail & Predictive Forecast</h3>
       <p>Terminate with exit code 1 if current spend breaches your budget, or use machine learning predictions to alert if projected month-end spend is on track to breach your limit:</p>
       <pre><code># Guardrail on actual spend:

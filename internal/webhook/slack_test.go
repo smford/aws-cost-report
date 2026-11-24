@@ -40,6 +40,8 @@ func TestSendSlackNotification(t *testing.T) {
 		t.Fatalf("failed to generate mock report: %v", err)
 	}
 
+	report.Metadata.AccountName = "FinOps Test"
+
 	ctx := context.Background()
 	// Test sending notification with threshold alert
 	err = SendSlackNotification(ctx, ts.URL, report, 20.00)
@@ -49,6 +51,20 @@ func TestSendSlackNotification(t *testing.T) {
 
 	if len(receivedPayload.Blocks) == 0 {
 		t.Fatalf("expected blocks in received Slack payload")
+	}
+
+	// Verify account name displayed near account ID
+	foundAccount := false
+	for _, block := range receivedPayload.Blocks {
+		for _, f := range block.Fields {
+			if f.Text == "*Account:*\n`715195480427` (FinOps Test)" {
+				foundAccount = true
+				break
+			}
+		}
+	}
+	if !foundAccount {
+		t.Errorf("expected account name and ID combined in Slack fields")
 	}
 
 	// Verify alert title

@@ -20,7 +20,7 @@ budget:
   fail_on_threshold: 0.00 # 0.00 disables exit-1 behavior
 
 reporting:
-  format: "table" # table, markdown, json, csv
+  format: "table" # table, markdown, html, json, csv, prometheus, minimal
   write_job_summary: true
 
 # Friendly account aliases for LINKED_ACCOUNT grouping and metadata display

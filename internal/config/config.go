@@ -271,7 +271,7 @@ func LoadConfig(args []string) (*Config, error) {
 		compareMoM         = fs.Bool("compare", false, "Compare Month-over-Month with preceding period")
 		failThresh         = fs.Float64("fail-on-threshold", -1.0, "Terminate with exit code 1 if total cost exceeds this threshold")
 		threshAlias        = fs.Float64("threshold", -1.0, "Alias for --fail-on-threshold")
-		format             = fs.String("format", "", "Output format: table, markdown, json, csv")
+		format             = fs.String("format", "", "Output format: table, markdown, html, json, csv, prometheus, minimal")
 		writeSummary       = fs.Bool("write-summary", true, "Write markdown report to $GITHUB_STEP_SUMMARY when set")
 		mockMode           = fs.Bool("mock", false, "Run in offline mock mode with simulated billing data")
 		serverMode         = fs.Bool("server", false, "Run as an HTTP service daemon exposing /healthz and /report")
@@ -683,10 +683,10 @@ func (c *Config) Validate() error {
 	// 1. Format validation
 	if c.Reporting.Format != "" {
 		switch strings.ToLower(c.Reporting.Format) {
-		case "table", "markdown", "md", "html", "json", "csv", "prometheus", "prom":
+		case "table", "markdown", "md", "html", "json", "csv", "prometheus", "prom", "minimal", "min":
 			// valid
 		default:
-			return fmt.Errorf("invalid format %q: supported formats are table, markdown, html, json, csv, prometheus", c.Reporting.Format)
+			return fmt.Errorf("invalid format %q: supported formats are table, markdown, html, json, csv, prometheus, minimal", c.Reporting.Format)
 		}
 	}
 

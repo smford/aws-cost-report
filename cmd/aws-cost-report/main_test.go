@@ -158,6 +158,8 @@ func TestRunCLIMockMode(t *testing.T) {
 		"--mock",
 		"--compare",
 		"--format", "markdown",
+		"--start", "2026-09-01",
+		"--end", "2026-10-01",
 		"--output", outFile,
 		"--json-summary", jsonFile,
 		"--threshold", "100.00",
@@ -605,6 +607,12 @@ func TestRunCommandEntrypoints(t *testing.T) {
 			containsText: "<!DOCTYPE html>",
 		},
 		{
+			name:         "generate mock minimal",
+			args:         []string{"generate", "--mock", "--compare", "--format=minimal", "--account-name=Test Account"},
+			expectedCode: 0,
+			containsText: "*Account:* `715195480427` (Test Account)",
+		},
+		{
 			name:         "generate mock monthly breakdown",
 			args:         []string{"generate", "--mock", "--monthly"},
 			expectedCode: 0,
@@ -818,6 +826,7 @@ func TestBuildServerMuxEndpoints(t *testing.T) {
 		{"table", "text/plain"},
 		{"csv", "text/csv"},
 		{"prometheus", "text/plain"},
+		{"minimal", "text/plain"},
 	}
 
 	for _, f := range formats {

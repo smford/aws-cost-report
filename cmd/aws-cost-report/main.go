@@ -61,7 +61,7 @@ GENERATE FLAGS:
   --current-month         Alias for --mtd
   --monthly               Display multi-month historical breakdown with each month as a separate column (default: 12 months)
   --trend                 Alias for --monthly
-  --format <string>       Output format: table (default), markdown, html, json, csv, prometheus
+  --format <string>       Output format: table (default), markdown, html, json, csv, prometheus, minimal
   --months <int>          Number of historical complete months back to query (default: 1)
   --start <YYYY-MM-DD>    Explicit billing start date (inclusive)
   --end <YYYY-MM-DD>      Explicit billing end date (inclusive)
@@ -429,6 +429,11 @@ func runCLI(cfg *config.Config, stdout, stderr io.Writer) int {
 	case "prometheus", "prom":
 		if err := renderer.RenderPrometheus(outWriter, report, cfg.Budget.FailOnThreshold, version, commit, date); err != nil {
 			fmt.Fprintf(stderr, "Error rendering prometheus: %v\n", err)
+			return 1
+		}
+	case "minimal", "min":
+		if err := renderer.RenderMinimal(outWriter, report, cfg.Budget.FailOnThreshold); err != nil {
+			fmt.Fprintf(stderr, "Error rendering minimal: %v\n", err)
 			return 1
 		}
 	default:
@@ -948,6 +953,9 @@ func buildServerMux(cfg *config.Config, cache *reportCache) *http.ServeMux {
 		case "prometheus", "prom":
 			w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
 			_ = renderer.RenderPrometheus(w, report, reqCfg.Budget.FailOnThreshold, version, commit, date)
+		case "minimal", "min":
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			_ = renderer.RenderMinimal(w, report, reqCfg.Budget.FailOnThreshold)
 		default:
 			w.Header().Set("Content-Type", "application/json")
 			_ = renderer.RenderJSON(w, report)

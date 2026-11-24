@@ -41,6 +41,7 @@ A production-grade, zero-dependency (outside official AWS SDK v2 and YAML parser
   - `json`: Structured JSON array for downstream analytics and log aggregators.
   - `csv`: Standard CSV format with column headers.
   - `prometheus`: Standard Prometheus text exposition format (version 0.0.4) for metrics scraping and dashboards.
+  - `minimal`: High-density compact format optimized for messaging webhooks, mobile screens, and notifications without wasteful whitespace.
 - **Built-in Rate Limiting & Resilience**: Employs exponential backoff with jitter to absorb AWS Cost Explorer API rate limits (`LimitExceededException`).
 - **Concurrent Comparison Fetching**: Fetches current and historical periods concurrently, reducing query latency by 50%.
 - **Zero-AWS Offline Mode (`--mock`)**: Generates realistic simulated billing data for testing pipelines and local evaluations without active AWS credentials.
@@ -734,7 +735,7 @@ aws-cost-report --server --mock
 - **`GET /readyz`**: Readiness probe verifying AWS credential authentication and STS caller identity (or mock readiness).
 - **`GET /metrics`**: Prometheus metrics exposition endpoint (`text/plain; version=0.0.4`) exposing account totals, service-by-service costs, MoM deltas, and budget guardrail alerts for Prometheus and Grafana.
 - **`GET /report`**: Generates reports dynamically with 15-minute in-memory caching to avoid AWS Cost Explorer rate limits (`LimitExceededException`).
-  - Supports query parameters: `?format=markdown&compare=true&top=5&months=1&group-by=SERVICE`. Format options: `table`, `markdown`, `json`, `csv`, `prometheus`.
+  - Supports query parameters: `?format=markdown&compare=true&top=5&months=1&group-by=SERVICE`. Format options: `table`, `markdown`, `html`, `json`, `csv`, `prometheus`, `minimal`.
 
 ---
 
@@ -803,7 +804,7 @@ To run `aws-cost-report`, the executing IAM principal requires read permissions 
 | `--granularity` | | `MONTHLY` | Spend granularity: `MONTHLY` (default) or `DAILY` |
 | `--forecast` | | `false` | Query AWS Cost Explorer machine learning forecast for projected month-end spend |
 | `--monthly` | `--trend` | `false` | Display multi-month historical breakdown with each month as a separate column (default: 12 months) |
-| `--format` | | `table` | Output format: `table`, `markdown`, `html`, `json`, `csv`, `prometheus` |
+| `--format` | | `table` | Output format: `table`, `markdown`, `html`, `json`, `csv`, `prometheus`, `minimal` |
 | `--filter` | `--service` | | Filter services by official name (`Amazon DynamoDB`), alias (`S3`, `EC2`), or substring |
 | `--tag` | `--tag-filter` | | Filter costs by AWS Cost Allocation Tag (e.g. `Environment=Production` or `Team=Core,API`) |
 | `--top` | | `0` | Show top N highest cost items and aggregate remainder into "Other Services" |
