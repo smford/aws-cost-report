@@ -206,6 +206,9 @@ runs:
     - name: Set up aws-cost-report CLI
       id: setup-cli
       shell: bash
+      env:
+        INPUT_VERSION: ${{ inputs.version }}
+        ACTION_REF: ${{ github.action_ref }}
       run: |
         if command -v aws-cost-report >/dev/null 2>&1; then
           echo "aws-cost-report already present in PATH at $(command -v aws-cost-report)"
@@ -245,8 +248,7 @@ runs:
         BIN_DIR="${RUNNER_TEMP:-/tmp}/aws-cost-report-bin"
         mkdir -p "$BIN_DIR"
 
-        VERSION="${{ inputs.version }}"
-        ACTION_REF="${{ github.action_ref }}"
+        VERSION="$INPUT_VERSION"
 
         if [ -z "$VERSION" ] || [ "$VERSION" = "latest" ]; then
           if [[ "$ACTION_REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]]; then
@@ -289,141 +291,179 @@ runs:
     - name: Execute AWS Cost Report
       id: run-report
       shell: bash
+      env:
+        INPUT_COMPARE: ${{ inputs.compare }}
+        INPUT_FORMAT: ${{ inputs.format }}
+        INPUT_MONTHS: ${{ inputs.months }}
+        INPUT_START: ${{ inputs.start }}
+        INPUT_END: ${{ inputs.end }}
+        INPUT_GROUP_BY: ${{ inputs.group-by }}
+        INPUT_FILTER: ${{ inputs.filter }}
+        INPUT_TAG: ${{ inputs.tag }}
+        INPUT_TAG_FILTER: ${{ inputs.tag-filter }}
+        INPUT_THRESHOLD: ${{ inputs.threshold }}
+        INPUT_MIN_COST: ${{ inputs.min-cost }}
+        INPUT_TOP: ${{ inputs.top }}
+        INPUT_SLACK_WEBHOOK: ${{ inputs.slack-webhook }}
+        INPUT_TEAMS_WEBHOOK: ${{ inputs.teams-webhook }}
+        INPUT_WEBHOOK_URL: ${{ inputs.webhook-url }}
+        INPUT_S3_BUCKET: ${{ inputs.s3-bucket }}
+        INPUT_S3_KEY: ${{ inputs.s3-key }}
+        INPUT_WRITE_SUMMARY: ${{ inputs.write-summary }}
+        INPUT_MOCK: ${{ inputs.mock }}
+        INPUT_NO_CACHE: ${{ inputs.no-cache }}
+        INPUT_MONTHLY: ${{ inputs.monthly }}
+        INPUT_MTD: ${{ inputs.mtd }}
+        INPUT_NAME: ${{ inputs.name }}
+        INPUT_ACCOUNT_NAME: ${{ inputs.account-name }}
+        INPUT_CONFIG: ${{ inputs.config }}
+        INPUT_REGION: ${{ inputs.region }}
+        INPUT_ASSUME_ROLE_ARN: ${{ inputs.assume-role-arn }}
+        INPUT_ROLE_TO_ASSUME: ${{ inputs.role-to-assume }}
+        INPUT_ROLE_SESSION_NAME: ${{ inputs.role-session-name }}
+        INPUT_CURRENCY: ${{ inputs.currency }}
+        INPUT_FORECAST: ${{ inputs.forecast }}
+        INPUT_DAILY: ${{ inputs.daily }}
+        INPUT_EXCLUDE_CREDITS: ${{ inputs.exclude-credits }}
+        INPUT_CHARGE_TYPE: ${{ inputs.charge-type }}
+        INPUT_RECORD_TYPE: ${{ inputs.record-type }}
+        INPUT_OUTPUT_FILE: ${{ inputs.output-file }}
+        INPUT_FAIL_ON_THRESHOLD: ${{ inputs.fail-on-threshold }}
       run: |
         ARGS=()
 
-        if [ "${{ inputs.compare }}" = "true" ]; then
+        if [ "$INPUT_COMPARE" = "true" ]; then
           ARGS+=("--compare")
         fi
 
-        if [ -n "${{ inputs.format }}" ]; then
-          ARGS+=("--format=${{ inputs.format }}")
+        if [ -n "$INPUT_FORMAT" ]; then
+          ARGS+=("--format=$INPUT_FORMAT")
         fi
 
-        if [ -n "${{ inputs.months }}" ] && [ "${{ inputs.months }}" != "0" ]; then
-          ARGS+=("--months=${{ inputs.months }}")
+        if [ -n "$INPUT_MONTHS" ] && [ "$INPUT_MONTHS" != "0" ]; then
+          ARGS+=("--months=$INPUT_MONTHS")
         fi
 
-        if [ -n "${{ inputs.start }}" ]; then
-          ARGS+=("--start=${{ inputs.start }}")
+        if [ -n "$INPUT_START" ]; then
+          ARGS+=("--start=$INPUT_START")
         fi
 
-        if [ -n "${{ inputs.end }}" ]; then
-          ARGS+=("--end=${{ inputs.end }}")
+        if [ -n "$INPUT_END" ]; then
+          ARGS+=("--end=$INPUT_END")
         fi
 
-        if [ -n "${{ inputs.group-by }}" ]; then
-          ARGS+=("--group-by=${{ inputs.group-by }}")
+        if [ -n "$INPUT_GROUP_BY" ]; then
+          ARGS+=("--group-by=$INPUT_GROUP_BY")
         fi
 
-        if [ -n "${{ inputs.filter }}" ]; then
-          ARGS+=("--filter=${{ inputs.filter }}")
+        if [ -n "$INPUT_FILTER" ]; then
+          ARGS+=("--filter=$INPUT_FILTER")
         fi
 
-        if [ -n "${{ inputs.tag }}" ]; then
-          ARGS+=("--tag=${{ inputs.tag }}")
-        elif [ -n "${{ inputs.tag-filter }}" ]; then
-          ARGS+=("--tag-filter=${{ inputs.tag-filter }}")
+        if [ -n "$INPUT_TAG" ]; then
+          ARGS+=("--tag=$INPUT_TAG")
+        elif [ -n "$INPUT_TAG_FILTER" ]; then
+          ARGS+=("--tag-filter=$INPUT_TAG_FILTER")
         fi
 
-        if [ -n "${{ inputs.threshold }}" ]; then
-          ARGS+=("--threshold=${{ inputs.threshold }}")
+        if [ -n "$INPUT_THRESHOLD" ]; then
+          ARGS+=("--threshold=$INPUT_THRESHOLD")
         fi
 
-        if [ -n "${{ inputs.min-cost }}" ]; then
-          ARGS+=("--min-cost=${{ inputs.min-cost }}")
+        if [ -n "$INPUT_MIN_COST" ]; then
+          ARGS+=("--min-cost=$INPUT_MIN_COST")
         fi
 
-        if [ -n "${{ inputs.top }}" ]; then
-          ARGS+=("--top=${{ inputs.top }}")
+        if [ -n "$INPUT_TOP" ]; then
+          ARGS+=("--top=$INPUT_TOP")
         fi
 
-        if [ -n "${{ inputs.slack-webhook }}" ]; then
-          ARGS+=("--slack-webhook=${{ inputs.slack-webhook }}")
+        if [ -n "$INPUT_SLACK_WEBHOOK" ]; then
+          ARGS+=("--slack-webhook=$INPUT_SLACK_WEBHOOK")
         fi
 
-        if [ -n "${{ inputs.teams-webhook }}" ]; then
-          ARGS+=("--teams-webhook=${{ inputs.teams-webhook }}")
+        if [ -n "$INPUT_TEAMS_WEBHOOK" ]; then
+          ARGS+=("--teams-webhook=$INPUT_TEAMS_WEBHOOK")
         fi
 
-        if [ -n "${{ inputs.webhook-url }}" ]; then
-          ARGS+=("--webhook-url=${{ inputs.webhook-url }}")
+        if [ -n "$INPUT_WEBHOOK_URL" ]; then
+          ARGS+=("--webhook-url=$INPUT_WEBHOOK_URL")
         fi
 
-        if [ -n "${{ inputs.s3-bucket }}" ]; then
-          ARGS+=("--s3-bucket=${{ inputs.s3-bucket }}")
+        if [ -n "$INPUT_S3_BUCKET" ]; then
+          ARGS+=("--s3-bucket=$INPUT_S3_BUCKET")
         fi
 
-        if [ -n "${{ inputs.s3-key }}" ]; then
-          ARGS+=("--s3-key=${{ inputs.s3-key }}")
+        if [ -n "$INPUT_S3_KEY" ]; then
+          ARGS+=("--s3-key=$INPUT_S3_KEY")
         fi
 
-        if [ "${{ inputs.write-summary }}" = "true" ]; then
+        if [ "$INPUT_WRITE_SUMMARY" = "true" ]; then
           ARGS+=("--write-summary=true")
         else
           ARGS+=("--write-summary=false")
         fi
 
-        if [ "${{ inputs.mock }}" = "true" ]; then
+        if [ "$INPUT_MOCK" = "true" ]; then
           ARGS+=("--mock")
         fi
 
-        if [ "${{ inputs.no-cache }}" = "true" ]; then
+        if [ "$INPUT_NO_CACHE" = "true" ]; then
           ARGS+=("--no-cache")
         fi
 
-        if [ "${{ inputs.monthly }}" = "true" ]; then
+        if [ "$INPUT_MONTHLY" = "true" ]; then
           ARGS+=("--monthly")
         fi
 
-        if [ "${{ inputs.mtd }}" = "true" ]; then
+        if [ "$INPUT_MTD" = "true" ]; then
           ARGS+=("--mtd")
         fi
 
-        if [ -n "${{ inputs.name }}" ]; then
-          ARGS+=("--name=${{ inputs.name }}")
-        elif [ -n "${{ inputs.account-name }}" ]; then
-          ARGS+=("--name=${{ inputs.account-name }}")
+        if [ -n "$INPUT_NAME" ]; then
+          ARGS+=("--name=$INPUT_NAME")
+        elif [ -n "$INPUT_ACCOUNT_NAME" ]; then
+          ARGS+=("--name=$INPUT_ACCOUNT_NAME")
         fi
 
-        if [ -n "${{ inputs.config }}" ]; then
-          ARGS+=("--config=${{ inputs.config }}")
+        if [ -n "$INPUT_CONFIG" ]; then
+          ARGS+=("--config=$INPUT_CONFIG")
         fi
 
-        if [ -n "${{ inputs.region }}" ]; then
-          ARGS+=("--region=${{ inputs.region }}")
+        if [ -n "$INPUT_REGION" ]; then
+          ARGS+=("--region=$INPUT_REGION")
         fi
 
-        if [ -n "${{ inputs.assume-role-arn }}" ]; then
-          ARGS+=("--assume-role-arn=${{ inputs.assume-role-arn }}")
-        elif [ -n "${{ inputs.role-to-assume }}" ]; then
-          ARGS+=("--assume-role-arn=${{ inputs.role-to-assume }}")
+        if [ -n "$INPUT_ASSUME_ROLE_ARN" ]; then
+          ARGS+=("--assume-role-arn=$INPUT_ASSUME_ROLE_ARN")
+        elif [ -n "$INPUT_ROLE_TO_ASSUME" ]; then
+          ARGS+=("--assume-role-arn=$INPUT_ROLE_TO_ASSUME")
         fi
 
-        if [ -n "${{ inputs.role-session-name }}" ]; then
-          ARGS+=("--role-session-name=${{ inputs.role-session-name }}")
+        if [ -n "$INPUT_ROLE_SESSION_NAME" ]; then
+          ARGS+=("--role-session-name=$INPUT_ROLE_SESSION_NAME")
         fi
 
-        if [ -n "${{ inputs.currency }}" ]; then
-          ARGS+=("--currency=${{ inputs.currency }}")
+        if [ -n "$INPUT_CURRENCY" ]; then
+          ARGS+=("--currency=$INPUT_CURRENCY")
         fi
 
-        if [ "${{ inputs.forecast }}" = "true" ]; then
+        if [ "$INPUT_FORECAST" = "true" ]; then
           ARGS+=("--forecast")
         fi
 
-        if [ "${{ inputs.daily }}" = "true" ]; then
+        if [ "$INPUT_DAILY" = "true" ]; then
           ARGS+=("--daily")
         fi
 
-        if [ "${{ inputs.exclude-credits }}" = "true" ]; then
+        if [ "$INPUT_EXCLUDE_CREDITS" = "true" ]; then
           ARGS+=("--exclude-credits")
         fi
 
-        if [ -n "${{ inputs.charge-type }}" ]; then
-          ARGS+=("--charge-type=${{ inputs.charge-type }}")
-        elif [ -n "${{ inputs.record-type }}" ]; then
-          ARGS+=("--charge-type=${{ inputs.record-type }}")
+        if [ -n "$INPUT_CHARGE_TYPE" ]; then
+          ARGS+=("--charge-type=$INPUT_CHARGE_TYPE")
+        elif [ -n "$INPUT_RECORD_TYPE" ]; then
+          ARGS+=("--charge-type=$INPUT_RECORD_TYPE")
         fi
 
         REPORT_TMP="${RUNNER_TEMP:-/tmp}/aws-cost-report-output.txt"
@@ -447,10 +487,10 @@ runs:
         cat "$REPORT_TMP"
 
         # Handle optional output-file
-        if [ -n "${{ inputs.output-file }}" ]; then
-          mkdir -p "$(dirname "${{ inputs.output-file }}")"
-          cp "$REPORT_TMP" "${{ inputs.output-file }}"
-          echo "report_file=${{ inputs.output-file }}" >> "$GITHUB_OUTPUT"
+        if [ -n "$INPUT_OUTPUT_FILE" ]; then
+          mkdir -p "$(dirname "$INPUT_OUTPUT_FILE")"
+          cp "$REPORT_TMP" "$INPUT_OUTPUT_FILE"
+          echo "report_file=$INPUT_OUTPUT_FILE" >> "$GITHUB_OUTPUT"
         fi
 
         # Write multiline report output to GITHUB_OUTPUT
@@ -486,7 +526,7 @@ runs:
           BILLING_MONTH=$(jq -r '.billing_month // ""' "$SUMMARY_TMP")
           PERIOD=$(jq -r '.period // ""' "$SUMMARY_TMP")
         else
-          if [ -n "${{ inputs.threshold }}" ] && [ "$EXIT_CODE" -ne 0 ]; then
+          if [ -n "$INPUT_THRESHOLD" ] && [ "$EXIT_CODE" -ne 0 ]; then
             echo "threshold_breached=true" >> "$GITHUB_OUTPUT"
           else
             echo "threshold_breached=false" >> "$GITHUB_OUTPUT"
@@ -524,7 +564,7 @@ runs:
 
         # Check exit behavior for threshold breaches
         if [ "$EXIT_CODE" -ne 0 ]; then
-          if [ "${{ inputs.fail-on-threshold }}" = "false" ] && [ -n "${{ inputs.threshold }}" ]; then
+          if [ "$INPUT_FAIL_ON_THRESHOLD" = "false" ] && [ -n "$INPUT_THRESHOLD" ]; then
             echo "::warning::Budget threshold exceeded, but fail-on-threshold is set to false. Proceeding."
             exit 0
           fi

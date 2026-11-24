@@ -705,14 +705,14 @@ func buildServerMux(cfg *config.Config, cache *reportCache) *http.ServeMux {
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"status":"ok","version":"` + version + `"}`))
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok", "version": version})
 	})
 
 	mux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if cfg.MockMode {
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"status":"ready","mode":"mock"}`))
+			_ = json.NewEncoder(w).Encode(map[string]string{"status": "ready", "mode": "mock"})
 			return
 		}
 
@@ -781,8 +781,7 @@ func buildServerMux(cfg *config.Config, cache *reportCache) *http.ServeMux {
 				var err error
 				client, err = awsclient.NewRealClient(ctx)
 				if err != nil {
-					w.WriteHeader(http.StatusServiceUnavailable)
-					fmt.Fprintf(w, "# Error connecting to AWS: %v\n", err)
+					http.Error(w, fmt.Sprintf("# Error connecting to AWS: %v", err), http.StatusServiceUnavailable)
 					return
 				}
 			}
@@ -790,8 +789,7 @@ func buildServerMux(cfg *config.Config, cache *reportCache) *http.ServeMux {
 			var err error
 			report, err = client.GenerateReport(ctx, &reqCfg, time.Now())
 			if err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				fmt.Fprintf(w, "# Error generating report: %v\n", err)
+				http.Error(w, fmt.Sprintf("# Error generating report: %v", err), http.StatusInternalServerError)
 				return
 			}
 			cache.Set(cacheKey, report)

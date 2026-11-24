@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -55,7 +56,7 @@ func TestHealthzEndpoint(t *testing.T) {
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"status":"ok","version":"` + version + `"}`))
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok", "version": version})
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)

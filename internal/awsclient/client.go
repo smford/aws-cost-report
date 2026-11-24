@@ -2,10 +2,11 @@ package awsclient
 
 import (
 	"context"
+	crand "crypto/rand"
 	"errors"
 	"fmt"
 	"math"
-	"math/rand"
+	"math/big"
 	"sort"
 	"strconv"
 	"strings"
@@ -1552,6 +1553,17 @@ func isRetryableCostExplorerError(err error) bool {
 		strings.Contains(errStr, "429")
 }
 
+func randomJitter(maxMs int64) time.Duration {
+	if maxMs <= 0 {
+		return 0
+	}
+	n, err := crand.Int(crand.Reader, big.NewInt(maxMs))
+	if err != nil {
+		return 0
+	}
+	return time.Duration(n.Int64()) * time.Millisecond
+}
+
 func (c *Client) getCostAndUsageWithRetry(ctx context.Context, input *costexplorer.GetCostAndUsageInput) (*costexplorer.GetCostAndUsageOutput, error) {
 	maxRetries := 5
 	backoff := 300 * time.Millisecond
@@ -1567,7 +1579,7 @@ func (c *Client) getCostAndUsageWithRetry(ctx context.Context, input *costexplor
 		}
 
 		if isRetryableCostExplorerError(err) {
-			sleepDur := backoff + time.Duration(rand.Intn(200))*time.Millisecond
+			sleepDur := backoff + randomJitter(200)
 			select {
 			case <-ctx.Done():
 				return nil, ctx.Err()
@@ -1597,7 +1609,7 @@ func (c *Client) getCostForecastWithRetry(ctx context.Context, input *costexplor
 		}
 
 		if isRetryableCostExplorerError(err) {
-			sleepDur := backoff + time.Duration(rand.Intn(200))*time.Millisecond
+			sleepDur := backoff + randomJitter(200)
 			select {
 			case <-ctx.Done():
 				return nil, ctx.Err()

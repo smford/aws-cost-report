@@ -45,13 +45,15 @@ jobs:
 
       - name: Resolve and Create Tag
         id: resolve_tag
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
         run: |
           git fetch --tags --force
 
           if [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
             TAG_NAME="${GITHUB_REF#refs/tags/}"
-          elif [ -n "${{ inputs.tag }}" ]; then
-            TAG_NAME="${{ inputs.tag }}"
+          elif [ -n "$INPUT_TAG" ]; then
+            TAG_NAME="$INPUT_TAG"
           else
             HEAD_TAG=$(git tag --points-at HEAD | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+' | head -n1 || true)
             if [ -n "$HEAD_TAG" ]; then
@@ -134,9 +136,10 @@ jobs:
 
       - name: Generate Homebrew Formula
         id: formula
+        env:
+          TAG_NAME: ${{ steps.resolve_tag.outputs.tag }}
+          VERSION: ${{ steps.resolve_tag.outputs.version }}
         run: |
-          TAG_NAME="${{ steps.resolve_tag.outputs.tag }}"
-          VERSION="${{ steps.resolve_tag.outputs.version }}"
           chmod +x scripts/generate_formula.sh
           ./scripts/generate_formula.sh "$VERSION" "$TAG_NAME" "dist" "dist/aws-cost-report.rb"
 
