@@ -8,6 +8,8 @@ updates:
       day: "monday"
       time: "06:00"
       timezone: "UTC"
+    cooldown:
+      default-days: 7
     groups:
       go-dependencies:
         patterns:
@@ -22,6 +24,8 @@ updates:
       day: "monday"
       time: "06:00"
       timezone: "UTC"
+    cooldown:
+      default-days: 7
     groups:
       actions-dependencies:
         patterns:
@@ -36,4 +40,6 @@ updates:
       day: "monday"
       time: "06:00"
       timezone: "UTC"
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 10
